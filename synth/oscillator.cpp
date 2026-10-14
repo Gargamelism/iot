@@ -79,17 +79,23 @@ size_t wavetableBytesAllocated() {
   return bytes;
 }
 
-static void buildTable(int16_t *table, int spread, int harmonicCount) {
+float mipLevelCentreHz(int level) {
+  return WAVETABLE_MIP_BASE_HZ * exp2f(level + 0.5f);
+}
+
+static void buildTable(int16_t *table, int spread, int harmonicCount, float centreHz) {
+  // Weights see each harmonic's frequency at the level's (geometric) centre,
+  // so fixed-Hz formants land on the right harmonics for this octave.
   // Sum the terms first, then scale so they total VOLUME_Q15_ONE — that
   // bounds the composite's worst-case (all harmonics in phase) peak to
   // SINE_TABLE_AMPLITUDE, whichever spread and level this is.
   int16_t weightsQ15[NUM_HARMONICS];
   float sum = 0.0f;
   for (int h = 0; h < harmonicCount; h++) {
-    sum += harmonicWeightTerm(spread, h);
+    sum += harmonicWeightTerm(spread, h, (h + 1) * centreHz);
   }
   for (int h = 0; h < harmonicCount; h++) {
-    const float weight = harmonicWeightTerm(spread, h) / sum;
+    const float weight = harmonicWeightTerm(spread, h, (h + 1) * centreHz) / sum;
     weightsQ15[h] = (int16_t)(weight * VOLUME_Q15_ONE + 0.5f);
   }
 
@@ -152,7 +158,7 @@ bool initWavetables() {
         ok = false;
         continue;
       }
-      buildTable(table, spread, harmonicsForMipLevel(level));
+      buildTable(table, spread, harmonicsForMipLevel(level), mipLevelCentreHz(level));
       g_wavetable[spread][level] = table;
     }
   }

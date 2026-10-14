@@ -55,13 +55,16 @@ static void runTests() {
   // weights, and keeps some energy at every mip level — a level whose
   // retained harmonics all weigh 0 would divide by zero in buildTable().
   for (int spread = 0; spread < SPREAD_COUNT; spread++) {
-    for (int h = 0; h < NUM_HARMONICS; h++) {
-      const float w = harmonicWeightTerm(spread, h);
-      CHECK(w >= 0.0f && w <= 1.0f);
-    }
     for (int level = 0; level < WAVETABLE_MIP_LEVELS; level++) {
+      const float centreHz = mipLevelCentreHz(level);
+      for (int h = 0; h < NUM_HARMONICS; h++) {
+        const float w = harmonicWeightTerm(spread, h, (h + 1) * centreHz);
+        CHECK(w >= 0.0f && w <= 1.0f);
+      }
       float sum = 0.0f;
-      for (int h = 0; h < harmonicsForMipLevel(level); h++) sum += harmonicWeightTerm(spread, h);
+      for (int h = 0; h < harmonicsForMipLevel(level); h++) {
+        sum += harmonicWeightTerm(spread, h, (h + 1) * centreHz);
+      }
       CHECK(sum > 0.0f);
     }
   }

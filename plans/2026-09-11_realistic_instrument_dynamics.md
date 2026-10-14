@@ -165,7 +165,7 @@ and costs a second lookup plus a lerp per voice per sample.
 - **Flute tremolo**: amplitude wobble at the same rate, folded into the block's envelope target
   so Phase 1's per-sample ramp smooths it.
 
-## Phase 4 — formants fixed in Hz, not harmonic number (zero runtime cost)
+## Phase 4 — formants fixed in Hz, not harmonic number (zero runtime cost) ✅ implemented
 
 Every instrument model in `harmonic_spreads.h` pins its resonance to harmonic *numbers*, so the
 trumpet's "formant" slides with pitch. The mip pyramid already builds one table per octave,
@@ -174,11 +174,20 @@ so give the weight function the harmonic's real frequency:
 - `buildTable(table, spread, harmonicCount, levelCentreHz)` with
   `levelCentreHz = WAVETABLE_MIP_BASE_HZ · 2^(level + 0.5)`; `harmonicWeightTerm(spread, h,
   harmonicHz)` with `harmonicHz = (h+1) · levelCentreHz`.
-- A `formant(hz, centreHz, widthOctaves)` helper (Gaussian in log-frequency) that the models
-  multiply their source spectrum by. Sources, from the earlier research: trumpet 1.2–1.4 kHz,
+- A `formant(hz, centreHz, widthOctaves, boost)` helper that the models multiply their source
+  spectrum by: `(1 + boost·gauss(log2(hz/centre)/width)) / (1 + boost)`, a boost over a
+  baseline rather than a pure Gaussian — a pure band-pass at 1.3 kHz would leave a 113 Hz
+  trumpet note almost no fundamental (weight ~0.002) and all its energy on harmonics 10–13. Sources, from the earlier research: trumpet 1.2–1.4 kHz,
   clarinet 1.5–1.7 kHz, flute ~800 Hz, oboe 1.4 kHz (HyperPhysics), violin-family body
   resonances near 275 Hz (air) and 450 Hz (top plate) (Fletcher & Rossing ch. 10). The
-  trumpet table then simplifies to a gentle 1/√n source × the formant.
+  trumpet table then simplifies to a gentle 1/√n source × the formant (1.3 kHz, 1 octave,
+  boost 3). Clarinet and flute keep their tables (bore/harmonic-number effects) × a boost-2
+  formant; viola's harmonic 3–6 bump becomes the two body resonances. Guitar, piano (pluck/
+  strike position) and Hammond (electronic) stay harmonic-number based.
+- Caveat: levels 0–3 give only four spectral snapshots across the pot range, so the timbre
+  steps at 160/320/640 Hz, and a note held within ~0.3 semitone of a boundary can flip between
+  two tables at the vibrato rate. Listen for it; mitigations if needed: softer boost/wider
+  formant, half-octave levels (~8 KB per spread), or a per-voice level crossfade.
 - `test_oscillator.cpp`'s all-spreads loop gains a frequency argument; `buildTable()` still
   normalises the weight sum, so headroom is unchanged and no RAM changes.
 
@@ -217,8 +226,8 @@ Freeverb-style: 4 combs (1116, 1188, 1277, 1356 samples at 44.1 kHz) + 2 all-pas
 
 ## Suggested order and what each buys
 
-0 ✅ (RAM trim + budget test) → 1 ✅ (note-on + ADSR) → 2 (brightness filter) → 3 (detune +
-vibrato) → 4 (Hz formants) → 5 (noise) → 6 (phases) → 7 (reverb). After 1 and 2 the guitar
+0 ✅ (RAM trim + budget test) → 1 ✅ (note-on + ADSR) → 2 ✅ (brightness filter) → 3 ✅ (detune +
+vibrato) → 4 ✅ (Hz formants) → 5 (noise) → 6 (phases) → 7 (reverb). After 1 and 2 the guitar
 and piano patches stop being organ stops; 3 makes the piano a piano and the winds sound
 played; 4–7 are polish.
 

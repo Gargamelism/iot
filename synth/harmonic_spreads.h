@@ -8,7 +8,9 @@
 // use different ones (see voices.h for the per-voice assignment).
 //
 // harmonicWeightTerm() at the bottom is the single entry point: the weight of
-// harmonic h (h = 0 is the fundamental, n = h + 1 its multiple) for a spread.
+// harmonic h (h = 0 is the fundamental, n = h + 1 its multiple) for a spread,
+// given the harmonic's frequency in Hz (each mip level is built for its own
+// octave, so models with a fixed-frequency resonance can place it).
 // Only ever called while oscillator.cpp builds a wavetable at startup, so
 // nothing here touches the audio path — a spread may be as slow or as long a
 // table as it likes. buildTable() renormalizes the weights to sum to one, so
@@ -85,19 +87,30 @@ inline float weightEqual(int h) {
   return 1.0f;
 }
 
-// Cheap bowed-string approximation: natural 1/n falloff, plus a boosted
-// "formant" bump on the 3rd-6th harmonics (the nasal, woody quality that
-// separates a viola from a plain sawtooth spectrum), plus a faster rolloff
-// above the 8th harmonic for a mellower top end. The bump sits on fixed
-// harmonic numbers rather than a fixed frequency, so — unlike a real
-// viola's body resonance — it shifts with pitch instead of staying put;
-// still close enough to be recognizable across this synth's pitch range.
-inline float weightViola(int h) {
+// Fixed-frequency resonance: a gain of 1 + boost at centreHz, falling back
+// to 1 as a Gaussian in log-frequency (widthOctaves is its standard
+// deviation), divided by 1 + boost so the result stays in (0, 1]. A boost
+// over a baseline rather than a band-pass, so harmonics far from the
+// resonance keep the source's level instead of vanishing — a low note still
+// has its fundamental.
+inline float formant(float hz, float centreHz, float widthOctaves, float boost) {
+  const float x = log2f(hz / centreHz) / widthOctaves;
+  return (1.0f + boost * expf(-0.5f * x * x)) / (1.0f + boost);
+}
+
+// Cheap bowed-string approximation: natural 1/n falloff, the violin family's
+// two main body resonances — the air (Helmholtz) mode near 275 Hz and the
+// top-plate mode near 450 Hz, the woody quality that separates a viola from
+// a plain sawtooth — plus a faster rolloff above the 8th harmonic for a
+// mellower top end.
+// Source: Fletcher & Rossing, The Physics of Musical Instruments, 2nd ed.,
+//   ch. 10 (violin body resonances).
+inline float weightViola(int h, float hz) {
   const int n = h + 1;
   const float falloff = 1.0f / n;
-  const float formant = (n >= 3 && n <= 6) ? 1.6f : 1.0f;
+  const float body = formant(hz, 275.0f, 0.5f, 1.0f) * formant(hz, 450.0f, 0.5f, 1.0f);
   const float highRolloff = (n > 8) ? 0.5f : 1.0f;
-  return falloff * formant * highRolloff;
+  return falloff * body * highRolloff;
 }
 
 inline float weightOctavesWithSomeOdds(int h) {
@@ -107,10 +120,10 @@ inline float weightOctavesWithSomeOdds(int h) {
 }
 
 // --- Instrument models -----------------------------------------------------
-// Like the viola above, every model pins its shape to harmonic NUMBERS, so a
-// real instrument's fixed-frequency formants and body resonances shift with
-// pitch here. Each is tuned to be recognizable around the middle of this
-// synth's range.
+// Effects tied to the string or bore (pluck/strike position, the clarinet's
+// odd harmonics) are functions of harmonic NUMBER; radiation and body
+// resonances are fixed in Hz via formant(), so they stay put as the pitch
+// moves (resolved per mip-level octave).
 
 // Harmonics past the end of a table are silent.
 inline float weightFromTable(const float *table, int len, int h) {
@@ -155,7 +168,8 @@ inline float weightPiano(int h) {
 // Source: J. Wolfe, "Clarinet acoustics: an introduction",
 //   https://www.phys.unsw.edu.au/jw/clarinetacoustics.html and the per-note
 //   spectra, e.g. https://newt.phys.unsw.edu.au/music/clarinet/C4.html
-inline float weightClarinet(int h) {
+// The radiation formant around 1.5-1.7 kHz (HyperPhysics) is on top.
+inline float weightClarinet(int h, float hz) {
   static constexpr float kTable[] = {
       // n:  1     2     3     4     5     6     7     8
       1.00f, 0.06f, 0.35f, 0.05f, 0.22f, 0.06f, 0.16f, 0.07f,
@@ -163,7 +177,8 @@ inline float weightClarinet(int h) {
       0.12f, 0.09f, 0.09f, 0.08f, 0.07f, 0.06f, 0.06f, 0.05f,
       // n: 17    18    19    20    21    22
       0.05f, 0.04f, 0.04f, 0.03f, 0.03f, 0.03f};
-  return weightFromTable(kTable, sizeof(kTable) / sizeof(kTable[0]), h);
+  return weightFromTable(kTable, sizeof(kTable) / sizeof(kTable[0]), h) *
+         formant(hz, 1600.0f, 1.0f, 2.0f);
 }
 
 // Flute: nearly a sine. Only the first seven or so harmonics are audible,
@@ -173,32 +188,27 @@ inline float weightClarinet(int h) {
 //   intensity decreases monotonically),
 //   https://www.physicsclassroom.com/getattachment/actprep/act10ag.pdf ;
 //   J. Wolfe, "Flute acoustics", https://www.phys.unsw.edu.au/jw/fluteacoustics.html
-inline float weightFlute(int h) {
+// Formant near 800 Hz (HyperPhysics) on top.
+inline float weightFlute(int h, float hz) {
   static constexpr float kTable[] = {
       // n:  1     2     3     4     5     6     7     8
       1.00f, 0.50f, 0.20f, 0.10f, 0.05f, 0.03f, 0.02f, 0.01f};
-  return weightFromTable(kTable, sizeof(kTable) / sizeof(kTable[0]), h);
+  return weightFromTable(kTable, sizeof(kTable) / sizeof(kTable[0]), h) *
+         formant(hz, 800.0f, 1.0f, 2.0f);
 }
 
-// Trumpet (mid range, forte). Brass radiates most strongly at a few hundred
-// Hz to ~1.3 kHz — a "formant" on the 2nd-5th harmonics for a note around
-// 300 Hz — with the fundamental ~3 dB below the peak and a gradual rolloff
-// above, the bell acting as a megaphone rather than a resonator up there.
-// The shape matches Hammond's own "French Trumpet" registration (7888 872:
-// harmonics 2-5 full, fundamental one step down).
+// Trumpet (forte). Brass radiates most strongly around 1.2-1.4 kHz — a
+// formant fixed in Hz, so for a note near 300 Hz it lands on the 2nd-5th
+// harmonics with the fundamental a few dB below the peak, and a gradual
+// rolloff above, the bell acting as a megaphone rather than a resonator up
+// there. Modelled as a gentle 1/sqrt(n) source times that formant.
 // Source: J. Wolfe, "Brass instrument acoustics",
 //   https://www.phys.unsw.edu.au/jw/brassacoustics.html ; HyperPhysics,
 //   trumpet formant 1200-1400 Hz,
 //   https://hyperphysics.gsu.edu/hbase/Music/orchins.html
-inline float weightTrumpet(int h) {
-  static constexpr float kTable[] = {
-      // n:  1     2     3     4     5     6     7     8
-      0.70f, 1.00f, 1.00f, 1.00f, 0.90f, 0.70f, 0.55f, 0.45f,
-      // n:  9    10    11    12    13    14    15    16
-      0.35f, 0.28f, 0.22f, 0.18f, 0.15f, 0.12f, 0.10f, 0.08f,
-      // n: 17    18    19    20    21    22
-      0.07f, 0.06f, 0.05f, 0.04f, 0.035f, 0.03f};
-  return weightFromTable(kTable, sizeof(kTable) / sizeof(kTable[0]), h);
+inline float weightTrumpet(int h, float hz) {
+  const int n = h + 1;
+  return formant(hz, 1300.0f, 1.0f, 3.0f) / sqrtf((float)n);
 }
 
 // Hammond tonewheel organ registrations. `drawbars` is the seven digits for
@@ -240,19 +250,19 @@ inline float weightHammondTrumpet(int h) {
 
 // --- Dispatch --------------------------------------------------------------
 
-inline float harmonicWeightTerm(int spread, int h) {
+inline float harmonicWeightTerm(int spread, int h, float harmonicHz) {
   switch (spread) {
     case SPREAD_SINE:              return weightSine(h);
     case SPREAD_OCTAVE:            return weightOctave(h);
     case SPREAD_SQUARE:            return weightSquare(h);
     case SPREAD_EQUAL:             return weightEqual(h);
-    case SPREAD_VIOLA:             return weightViola(h);
+    case SPREAD_VIOLA:             return weightViola(h, harmonicHz);
     case SPREAD_OCTAVES_WITH_ODDS: return weightOctavesWithSomeOdds(h);
     case SPREAD_GUITAR:            return weightGuitar(h);
     case SPREAD_PIANO:             return weightPiano(h);
-    case SPREAD_CLARINET:          return weightClarinet(h);
-    case SPREAD_FLUTE:             return weightFlute(h);
-    case SPREAD_TRUMPET:           return weightTrumpet(h);
+    case SPREAD_CLARINET:          return weightClarinet(h, harmonicHz);
+    case SPREAD_FLUTE:             return weightFlute(h, harmonicHz);
+    case SPREAD_TRUMPET:           return weightTrumpet(h, harmonicHz);
     case SPREAD_HAMMOND_TIBIA:     return weightHammondTibia(h);
     case SPREAD_HAMMOND_TRUMPET:   return weightHammondTrumpet(h);
     case SPREAD_PULSATING:         return weightPulsating(h);

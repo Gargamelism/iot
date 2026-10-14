@@ -37,6 +37,10 @@ int mipLevelForFreq(float freqHz);
 // How many harmonics level `level` keeps. Exposed for the band-limiting test.
 int harmonicsForMipLevel(int level);
 
+// Geometric centre of level `level`'s octave — the fundamental its table's
+// harmonic weights are evaluated at.
+float mipLevelCentreHz(int level);
+
 // Highest mip level worth building for `spread`: the top of the range any
 // kPatches voice using it can be pitched into (FREQ_MAX_HZ plus that voice's
 // scale-degree/cents offset, plus vibrato/snap margin). initWavetables()
