@@ -1,0 +1,157 @@
+---
+id: 11-envelopes
+title: "Envelopes & articulation"
+weeks: 1
+prereqs: [10-patches-and-ui]
+milestones:
+  - id: m11-gate
+    text: "Closing the gate switch starts a note with an audible attack; opening it releases smoothly to silence. No click at either edge, even with 2 ms attack."
+  - id: m11-shapes
+    text: "Three patches with clearly different envelopes, e.g. organ (instant on/off), pluck (fast attack, long decay to 0) and bowed (slow attack, high sustain), are recognisable by their envelope alone."
+  - id: m11-retrigger
+    text: "Moving the pitch pot to a new root while the gate is held re-plucks the note, starting from the current level (no dip to 0)."
+  - id: m11-zipper
+    text: "A slow release on a sine has no audible stepping (zipper noise). You've A/B'd it against a version without per-sample smoothing."
+  - id: m11-short
+    text: "A quick tap of the gate (< 250 ms) gets its own short-note behaviour (e.g. a shorter release, staccato), and a held note can auto-release after a configured time."
+---
+
+## Goal
+
+Give notes a beginning and an end: a gated ADSR envelope with musical curves, retriggering and
+staccato, applied with no clicks or zipper noise.
+
+## You'll be able to
+
+- Implement ADSR as a state machine with linear and exponential segments.
+- Run the envelope at block rate and interpolate it per sample, and explain why both matter.
+- Handle retrigger, release-from-anywhere and short notes correctly.
+- Choose envelope times that make a patch read as plucked, struck, blown or bowed.
+
+## Concepts
+
+- **The gate.** A key or switch is held. The *trigger* is the rising edge, and release starts
+  on the falling edge.
+- **ADSR.** Attack to full, decay to the sustain level, sustain while held, release to zero.
+  There's an idle state too.
+- **Curves.** Linear attack (a constant rise feels fast) versus exponential decay and release
+  (loudness is logarithmic). The one-pole "chase the target" form, and time constants (63%,
+  or 4.6τ to −40 dB).
+- **Control rate vs audio rate.** Compute the target once per block, then ramp per sample.
+  A step change of gain every 5.8 ms is a 172 Hz buzz: zipper noise.
+- **Retrigger.** Restart attack *from the current gain*, not from 0. Starting from 0 dips the
+  level, and the dip is audible as a click.
+- **Articulation extras.** Short notes (staccato) get a different release, and auto-release
+  after a fixed hold covers sounds that can't sustain forever.
+- **Fixed-point ramping.** A per-sample step smaller than 1 LSB truncates to 0. Carry extra
+  fractional bits.
+
+## Read
+
+**Core (≈6 h)**
+
+- Nigel Redmon, EarLevel, **"Envelope generators: ADSR Part 1"**, **"Part 2"** and **"ADSR
+  code"** (2013) (≈1.5 h).
+- Gordon Reid, *Synth Secrets* **part 7 "Envelopes, Gates & Triggers"** and **part 8 "More
+  About Envelopes"** (≈1 h).
+- Pirkle, *Designing Software Synthesizer Plugins in C++* 2e, **ch 7 Envelope Generators and
+  DCA** (≈2 h).
+- Puckette, *TTEM*, **4.1 Envelope Generators**, **4.2 Linear and Curved Amplitude Shapes**
+  and **4.3 Continuous and discontinuous control changes** (≈1.5 h).
+
+## Explore (notebook)
+
+`11-envelopes.ipynb`:
+
+1. Implement ADSR in Python as a state machine updated per block (256 frames). Plot gain
+   against time for organ, pluck and bowed settings.
+2. **Linear vs exponential release.** Render both on a 220 Hz sine and listen. Plot them in dB
+   too: which one *looks* linear in dB?
+3. **Zipper noise.** Apply the block-rate gain (a staircase) to a sine, and then a
+   per-sample-ramped version. Compare the spectra: find the 172 Hz sidebands.
+4. **Retrigger.** Retrigger mid-release (a) from 0 and (b) from the current gain. Plot the
+   waveform around the event and find the discontinuity.
+5. **Fixed-point ramp.** With a Q15 gain and a 256-sample ramp of a tiny gain change, show
+   that the integer step truncates to 0, and that 16 extra fractional bits fix it.
+
+## Play (playground)
+
+**ADSR lab.**
+- A, D, S and R sliders, a curve type per segment, a "gate" button (hold to play) and a
+  "re-pluck" button.
+- A live plot of the gain over the waveform.
+- Toggles: block-rate staircase versus per-sample ramp, and retrigger from 0 versus from the
+  current gain.
+- You should *hear* zipper noise on a slow release and the dip when retriggering from 0.
+
+**Reuses** the module 08 voice mixer. **New:** the envelope engine and the gain plot.
+
+## Build
+
+Start from module 10 (patches and a gate switch that currently hard-mutes).
+
+**Add:**
+
+- **An envelope per patch** (all its voices trigger together), configured from the patch
+  table. *Example* configs, all times in ms:
+
+  ```cpp
+  struct Env { uint16_t attack, decay; uint8_t sustainPct; uint16_t release; };
+  constexpr Env kOrgan = {5, 0, 100, 200};    // click-free on/off
+  constexpr Env kPluck = {3, 700, 0, 150};    // no sustain, long decay
+  constexpr Env kBowed = {10, 100, 90, 200};  // slow-ish attack, high sustain
+  ```
+- **Gate → noteOn/noteOff**, with the gate from module 05 and the "new root" event from
+  module 09 both triggering. *Example* debug trace: `env: ATTACK -> DECAY (412 ms) -> IDLE`.
+- **Per-sample ramping** between block targets. *Example:* from gain 0.80 to 0.79 over 256
+  samples, the step per sample is 0.00004, well under 1 LSB of Q15. Keep the extra bits.
+- **Short notes and auto-release.** *Example:* `shortNoteMs = 250` gives a gate shorter than
+  250 ms a 50 ms release; `holdMs = 7000` releases a held note after 7 s.
+- **Muting via the envelope**: the gate no longer hard-mutes, and release reaches silence.
+
+**Constraints:**
+
+- The envelope state machine runs once per block. Floats are allowed there.
+- The per-sample work is one add and one shift (or similar) per frame. Integer only.
+- Retrigger never jumps the gain downward.
+- Switching patches mid-note doesn't force a retrigger.
+
+**Deliverable:** an envelope unit, per-patch configs and the per-sample gain ramp in the
+audio task.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. One envelope per patch or one per voice? What do you lose by sharing, and what do you gain
+   in cycles?
+2. Where does the envelope's gain multiply: per voice, or once on the mix?
+3. A gate edge and a new-root event can both arrive within one block. In what order do you
+   apply them?
+4. How do you define "attack time" for an exponential curve that never quite arrives? When
+   do you snap to the target?
+
+## Compare (spoiler)
+
+- `synth/envelope.h` and `envelope.cpp`:
+  - `EnvelopeConfig` adds short-note fields and `sustainLengthMs`.
+  - The `advance*()` functions, one per state: a linear attack, then an exponential decay and
+    release via `expf(-blockMs / tau)`.
+  - `kGainSnapEpsilon` snaps an asymptote to its target.
+  - `noteOn()` restarts the attack from the current `gain_`.
+  - `noteOff()` latches `shortNote_`.
+- `synth/audio_task.cpp`:
+  - one `s_ampEnvelope` per patch, applied to the **mixed** sample;
+  - `kGainRampFracBits` = 16, with the comment about the zero per-sample step;
+  - the `retriggerSeq` handling and its comment about pot sweeps while the gate is open.
+- `synth/voices.h`: `kEnvOrgan`, `kEnvPluck`, `kEnvStruck`, `kEnvReed`, `kEnvBrass` and
+  `kEnvBowed`. `kEnvReed` and `kEnvBrass` use the short-note and auto-release fields.
+- `plans/2026-09-11_realistic_instrument_dynamics.md`, *Phase 1*: the design discussion.
+
+## Stretch
+
+- Per-voice envelopes, so a chord's notes can decay at different rates (like a real piano's
+  bass versus treble). Measure the cost.
+- Velocity: map how fast the gate closes (or the volume pot) to attack time and peak level.

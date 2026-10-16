@@ -1,0 +1,226 @@
+---
+id: 05-controls
+title: "Controls: pots, encoder, switch"
+weeks: 1
+prereqs: [04-real-time-one-core]
+milestones:
+  - id: m05-pot-still
+    text: "With the pitch pot untouched for 60 s, the Serial value never changes and the tone is perfectly steady (tuner needle doesn't flicker)."
+  - id: m05-pot-fast
+    text: "A full, fast sweep of either pot reaches its end value audibly 'immediately' (under ~50 ms); no lag you can feel."
+  - id: m05-pitch-musical
+    text: "Each quarter turn of the pitch pot spans roughly the same musical interval (check the four quarter-points with a tuner: about 11 semitones each, 80 Hz to 1 kHz overall)."
+  - id: m05-volume
+    text: "The volume pot goes from true silence to full scale with no steps or crackle while turning."
+  - id: m05-encoder
+    text: "100 encoder clicks clockwise and then 100 counter-clockwise, slow and fast, give a counter that ends exactly back at 0, with exactly one step per click."
+  - id: m05-button
+    text: "100 presses of the encoder button give exactly 100 toggles (no doubles)."
+  - id: m05-gate
+    text: "The gate switch mutes and unmutes the tone (a hard mute is fine for now; envelopes come in module 11)."
+  - id: m05-no-glitch
+    text: "Twirling all controls at once for a minute never produces a click, a dropout or a watchdog reset, and the liveness LED keeps blinking."
+---
+
+## Goal
+
+Turn noisy, bouncy physical inputs into clean, musically mapped parameters and hand them
+safely to the audio task.
+
+## You'll be able to
+
+- Explain where ADC jitter comes from and trade **noise against latency** knowingly, with
+  oversampling, an exponential moving average and hysteresis.
+- Map a knob to pitch and volume the way the ear hears them, not the way the voltage moves.
+- Decode a quadrature encoder reliably with a state table, and say why it rejects bounce
+  for free.
+- Debounce a push button and read a switch with an internal pull-up.
+- Publish a group of related parameters from `loop()` to the audio task without the audio
+  side ever waiting.
+
+## Concepts
+
+- **The pot as a voltage divider.** The ESP32-C3's 12-bit SAR ADC, its attenuation settings
+  (usable input range), and its nonlinearity near the rails.
+- **Noise reduction.** Averaging N samples cuts white noise by √N. The **EMA**
+  `y += α(x − y)` is a one-pole low-pass, and its time constant depends on *how often you call
+  it*. A **hysteresis/deadband** stops a value sitting on a code boundary from flickering.
+- **Perceptual mapping.** Pitch is heard logarithmically, so equal rotation should give an
+  equal frequency *ratio*: `f = fmin · (fmax/fmin)^x`. Loudness also works in ratios (dB).
+  Compare a linear and an "audio taper" volume.
+- **Resolution at the low end.** Work out how many cents one ADC count is worth at 80 Hz
+  versus at 1 kHz under an exponential map.
+- **Quadrature encoders.** The 2-bit Gray code (00→01→11→10). A 16-entry transition table
+  gives +1/−1/0, and impossible jumps score 0, so contact bounce cancels itself. The
+  *detent* does not equal the *edge*: this EC11 clicks every 2 edges.
+- **Interrupts on a single core.** An ISR preempts even the max-priority audio task. Keep it
+  tiny and in IRAM, share a counter with a critical section, and drain it from `loop()`.
+- **Debouncing.** Mechanical bounce lasts a few ms, so lock out further edges for a fixed
+  time after one.
+- **Control rate vs audio rate.** `loop()` runs only when the audio task yields, about once
+  per audio block. Parameters change at that rate, which hints at zipper noise (module 11).
+
+## Read
+
+**Core (≈4.5 h)**
+
+- Espressif, *ESP-IDF Programming Guide*, ESP32-C3 → API Reference → Peripherals →
+  **ADC Oneshot Mode Driver** and **ADC Calibration Driver**: the attenuation table and the
+  "minimizing noise" notes (≈1 h).
+- Jack Ganssle, **A Guide to Debouncing**, whole paper; skim the hardware-filter parts
+  (≈1 h).
+- Ben Buxton, **Rotary encoder handler** README and `Rotary.cpp`: the full-step vs half-step
+  tables (≈0.5 h).
+- *Mastering the FreeRTOS Real Time Kernel*, **ch 7 Interrupt Management**: deferred
+  interrupt processing and the "critical sections" material (≈1.5 h).
+- Nigel Redmon, EarLevel, **"A one-pole filter"** (2012). The EMA *is* this filter. You'll
+  return to it in module 12 (≈0.5 h).
+
+**Optional**
+
+- Loy, *Musimathics* Vol. 1, **ch 6 Psychophysical Basis of Sound**: the sections on
+  loudness and pitch perception, to justify your mappings.
+- Arduino-ESP32 docs, **GPIO** and **Interrupts** pages (`attachInterrupt`, `IRAM_ATTR`).
+
+## Explore (notebook)
+
+`05-controls.ipynb`:
+
+1. **Real data first.** Log 2,000 raw ADC readings of a *stationary* pot over Serial, paste
+   them in, and plot a histogram. How many codes wide is the noise? Is it Gaussian?
+2. **A simulated sweep.** Make a slow ramp plus a sudden jump of a "true" pot value, then add
+   your measured noise and 12-bit quantization.
+3. Run it through (a) raw, (b) oversampled N = 1/4/8/16, (c) EMA at several α, (d) EMA plus
+   hysteresis at several thresholds.
+4. For each, plot the **residual jitter** (peak-to-peak while stationary) against the
+   **latency** (time to 90% after the jump). Pick your operating point and say why.
+5. **Mapping.** Plot Hz against pot position for linear and exponential maps. Then plot
+   *cents per ADC count* along the travel. Where is the exponential map coarsest?
+6. **Hysteresis vs resolution.** With your chosen threshold, what is the smallest pitch step
+   the pot can make at 80 Hz? Is it audible? (A just-noticeable difference is roughly 5–10
+   cents.)
+
+**Aha:** smoothing is a filter, so it always costs latency, and the right amount depends on
+how often `loop()` runs.
+
+## Play (playground)
+
+**Knob lab.**
+- A virtual knob drives a sine through a *simulated* noisy 12-bit ADC.
+- Toggles for oversampling (N), EMA (α slider) and hysteresis (threshold slider), plus a
+  linear/exponential mapping switch.
+- Live readouts: Hz, note name, and a scrolling trace of the parameter.
+- You should *hear* pitch jitter vanish as smoothing goes up, and *feel* the knob get sluggish
+  when α gets too small.
+
+**Encoder lab.**
+- Shows A/B waveforms for a turn, with a "bounce" slider that injects random contact chatter.
+- Two decoders run side by side: a naive "count A's rising edges, read B" decoder and the
+  16-entry transition table, each with its step counter.
+- You should see the naive decoder miscount as bounce goes up while the table stays exact.
+
+**Reuses** from `web_sim/app.js`: `smoothValue`, `mapPitchHz`, `adcNoise`, `freqToNoteName`
+and the AudioWorklet sine. **New:** the encoder waveform renderer, the bounce injector and
+the naive decoder.
+
+## Build
+
+Start from your module 04 firmware: an audio task playing a fixed sine, with the liveness LED
+in `loop()`.
+
+**Add:**
+
+- **Pitch pot** → the sine's frequency, 80 Hz to 1 kHz, equal rotation for equal musical
+  interval. *Example:* the pot at ¼, ½ and ¾ of its travel should read about 150 Hz (D3),
+  280 Hz (C#4) and 530 Hz (C5). Each quarter is the same ratio, about 1.88×.
+- **Volume pot** → master level, from true silence to full scale. *Example:* fully
+  counter-clockwise gives a sample peak of exactly 0, not "very quiet". Fully clockwise peaks
+  at the level you chose in module 03.
+- **Gate switch** (SPST to GND) → mute/unmute. *Example:* flip it ten times quickly and get
+  ten clean mutes and unmutes, with no stuck state.
+- **Encoder rotation** → a signed step counter, exactly one step per detent. Print it on
+  change. *Example:* three clicks clockwise print `enc +1`, `enc +2`, `enc +3`; one click back
+  prints `enc +2`. Module 10 turns this into patch selection.
+- **Encoder button** → a boolean toggle. Print it on change. *Example:* `btn on`, `btn off`,
+  one line per press.
+- A single `Serial` debug line that is printed only when something changed. *Example* (the
+  format is up to you):
+
+  ```
+  vol 0.62  pitch 0.494 -> 278.4 Hz C#4  gate 1  enc +3  btn on
+  ```
+
+*Example API shape* (illustrative only; yours can differ):
+
+```cpp
+void controlsBegin();   // pin modes, interrupts, initial reads
+void controlsUpdate();  // read, smooth, map, publish; called from loop()
+// The audio task reads a snapshot of the published parameters once per block,
+// for example: struct Params { float freqHz; float volume; bool gate; ... };
+```
+
+**Constraints:**
+
+- The audio contract (see the curriculum): the audio task must never wait on the controls. If
+  fresh parameters aren't available this block, it reuses last block's.
+- The parameters the audio task reads must be *mutually consistent*. You will soon publish
+  several values that must never be seen half-updated (for example a patch index with its
+  frequencies).
+- The ISR (if you use one) does no `Serial`, no allocation, no floats, and must be
+  IRAM-resident.
+- Pins are fixed by the board. Check `pins.h` for which GPIOs are actually free, or work it
+  out from the board's pinout yourself.
+
+**Deliverable:** a `controls` unit with a begin/update API called from `setup()`/`loop()`,
+and the parameter handoff to the audio task.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+Answer these in your notes before you open Compare.
+
+1. Does your smoothing run in `loop()` or in the audio task? What is `loop()`'s actual call
+   rate, and is it steady? Measure it. What happens to your EMA's time constant when the
+   display refresh (module 10) makes some `loop()` iterations slower?
+2. Rotation: interrupt or polling? Use the fastest spin you can do by hand and the measured
+   `loop()` period to justify your choice. Is the button different?
+3. What exactly is the race between your ISR and the code that reads its counter? What is the
+   smallest critical section that closes it?
+4. Should the hysteresis compare the new reading against the *filtered* value or against the
+   *last accepted raw* reading? What failure does each choice have?
+5. Volume: linear amplitude or dB? Try both and describe how the bottom third of the knob
+   feels.
+6. A gate edge is an *event*, but the audio task samples your parameters only once per
+   block. How do you make sure it can't miss a quick on-off-on? (Think: a flag versus a
+   counter.)
+
+## Compare (spoiler)
+
+One answer lives in `synth/controls.cpp`, `synth/controls_math.cpp` and the `ADC_*` and
+`ENCODER_*` constants in `synth/pins.h`.
+
+- `readOversampled()` averages `ADC_OVERSAMPLE_COUNT` = 8 reads. Then `smoothValue()` applies
+  an EMA (`ADC_EMA_ALPHA` 0.15) gated by hysteresis (`ADC_HYSTERESIS_COUNTS` 4). Notice the
+  gate compares against the **last accepted raw** reading, not the filtered value.
+- `mapPitchHz()` is the exponential map. Volume is mapped **linearly**: is that what you
+  chose?
+- `encoderISR()` is `IRAM_ATTR`, reads both pins and accumulates `quadratureStep()`. The
+  16-entry table scores bounce as 0. `updateEncoderRotation()` drains it under a `portMUX`
+  critical section and converts edges to detents (`ENCODER_STEPS_PER_DETENT` = 2). The
+  comment says why rotation needs the ISR and the button doesn't.
+- `updateEncoderButton()`: time-lockout debounce (`ENCODER_BUTTON_DEBOUNCE_MS`).
+- `controlsUpdate()` publishes everything in **one** locked block into `g_oscParams`.
+  `controls.h` explains why the fields must move together. The audio side
+  (`audio_task.cpp`) only ever uses a zero-timeout `xSemaphoreTake`.
+- `OscParams::retriggerSeq` is a **counter**, not an edge flag. That is the answer to
+  question 6.
+
+## Stretch
+
+- Add ADC calibration (`adc_cali_*`) and measure whether it changes anything you can hear.
+- Encoder acceleration: bigger steps when it is spun fast.
+- Replace the EMA with a *dynamic* smoother (for example the 1€ filter) that stays smooth
+  when the knob is still and responsive when it moves.

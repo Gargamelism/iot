@@ -1,0 +1,163 @@
+---
+id: 04-real-time-one-core
+title: "Real time on one core"
+weeks: 1
+prereqs: [03-i2s-sound-out]
+milestones:
+  - id: m04-task
+    text: "Audio runs in its own max-priority FreeRTOS task; loop() keeps blinking the LED at 1 Hz while the tone plays cleanly."
+  - id: m04-load
+    text: "Serial reports the audio task's CPU load (cycles used per frame out of ~3,628), updated about once a second."
+  - id: m04-starve
+    text: "You've deliberately broken it (busy-wait in the audio task until loop() starves), seen the task watchdog fire, read the message, and fixed it."
+  - id: m04-handoff
+    text: "loop() changes the tone's pitch every 2 s through a shared parameter struct, and the audio task picks it up without ever waiting on a lock."
+  - id: m04-stress
+    text: "With loop() doing something slow (e.g. printing 2 KB of text every 100 ms), the audio stays perfectly clean."
+---
+
+## Goal
+
+Structure the firmware so audio can never miss a deadline on a single core shared with
+everything else, and know your exact CPU budget.
+
+## You'll be able to
+
+- Create and prioritize FreeRTOS tasks on the ESP32-C3, and predict who runs when.
+- Explain why the audio thread must never block on anything but the audio device.
+- Measure CPU load with the cycle counter and reason in cycles per frame.
+- Share parameters between `loop()` and the audio task without priority problems.
+- Recognize and diagnose a task watchdog reset.
+
+## Concepts
+
+- **The budget.** 160 MHz / 44.1 kHz ≈ **3,628 cycles per output frame**, for everything.
+- **FreeRTOS on one core.** Tasks, priorities and preemption. `loop()` is just a task too. A
+  max-priority audio task runs until it *blocks* (on the I2S write). Only then do lower
+  priorities, including IDLE, run.
+- **The task watchdog.** If IDLE never runs, the watchdog bites: `Task watchdog got
+  triggered … IDLE0`.
+- **Blocks and latency.** Audio is produced in blocks. Block length is the control
+  granularity and part of the latency, and per-block overhead gets spread across it.
+- **Real-time rules** (Bencina). In the audio callback: no locks you can wait on, no
+  allocation, no I/O, no unbounded loops.
+- **Sharing data.** A mutex with a *zero* timeout on the audio side (use last block's values
+  if busy). A lock-free alternative is double buffering. Related values must be published
+  together.
+- **Priority inversion**, and why a zero-timeout take sidesteps it.
+- **Measuring.** `esp_cpu_get_cycle_count()` around the block's compute, divided by the
+  number of frames.
+
+## Read
+
+**Core (≈6 h)**
+
+- *Mastering the FreeRTOS Real Time Kernel*, **ch 4 Task Management** (≈2 h) and **ch 8
+  Resource Management**: mutexes, priority inversion, critical sections (≈1.5 h).
+- Ross Bencina, **"Real-time audio programming 101: time waits for nothing"** (≈0.5 h).
+- Espressif, **ESP-IDF (ESP32-C3) → FreeRTOS (IDF)** overview and **Watchdogs** (task
+  watchdog section) (≈1 h).
+- Puckette, *TTEM*, **ch 3 Audio and control computations**: 3.1–3.3 (sampling theorem,
+  control, control streams) (≈1 h).
+
+**Optional**
+
+- *Mastering the FreeRTOS Real Time Kernel*, **ch 10 Task Notifications**: a lighter
+  alternative to the mutex.
+
+## Explore (notebook)
+
+`04-budget.ipynb`:
+
+1. **A budget calculator.** Given clock, sample rate and block size, compute cycles per frame,
+   block duration (ms) and the share of per-block overhead (assume a fixed cost per I2S write).
+2. Plot block size from 32 to 1,024: latency against overhead. Mark the size you choose.
+3. Enter your *measured* cycles per frame and turn it into "how many voices could I afford at
+   N cycles per voice?". You'll fill in N in module 06.
+4. Simulate a schedule: audio blocks every 5.8 ms take x% of each period, and `loop()` gets
+   the rest. How often does `loop()` actually run, and at what jitter?
+
+## Play (playground)
+
+**Single-core scheduler.**
+- A timeline shows the audio task's blocks (compute, then blocked on I2S) and `loop()`
+  filling the gaps.
+- Sliders: audio load %, block size and `loop()` work per iteration. A toggle makes the audio
+  task "wait on the mutex" instead of trying.
+- You should see what happens at >100% load (underrun clicks), and how a blocking take behind
+  a slow `loop()` makes the audio miss its deadline.
+
+**New:** everything (a canvas timeline simulation).
+
+## Build
+
+Start from module 03's tone.
+
+**Add:**
+
+- **An audio task.** Move the block generation and write into a task pinned to core 0 at the
+  highest priority. `loop()` now only blinks the LED and prints. *Example* (illustrative):
+
+  ```cpp
+  xTaskCreatePinnedToCore(audioTask, "audio", 4096, nullptr,
+                          configMAX_PRIORITIES - 1, nullptr, 0);
+  ```
+- **A load meter.** Time each block's compute with the cycle counter and report it about once
+  a second (from `loop()`, not from the audio task). *Example:*
+
+  ```
+  audio: 412 cyc/frame (11.4% of 3628), block 256 = 5.80 ms
+  ```
+- **A parameter handoff.** A struct of the parameters the audio task needs, written by `loop()`
+  and read by the audio task once per block, never waiting. *Example:* `loop()` alternates the
+  frequency between 440 and 660 Hz every 2 s.
+- **A broken version, then the fix.** Temporarily make the audio task spin, for example by
+  writing nothing and looping. Capture the watchdog output. *Example:*
+
+  ```
+  E (5123) task_wdt: Task watchdog got triggered. The following tasks did not reset the watchdog in time:
+  E (5123) task_wdt:  - IDLE0 (CPU 0)
+  ```
+
+**Constraints:**
+
+- The audio contract (see the curriculum), from now on and for every module.
+- If an I2S write ever comes back short, the task must not spin. Make sure it yields.
+- Stack size: justify the number.
+
+**Deliverable:** the task-based skeleton every later module builds on.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. If the audio task is at the highest priority and the C3 has one core, when exactly does
+   `loop()` run? How does that interact with polling an encoder (module 05)?
+2. Mutex with zero timeout, or a lock-free double buffer? What does each cost and what can go
+   wrong?
+3. If `write()` returns fewer bytes than asked, what's the safest thing to do on the audio
+   task?
+4. How would you know you're at 90% load before it fails audibly?
+
+## Compare (spoiler)
+
+- `synth/audio_task.cpp` `audioTaskBegin()`: `xTaskCreatePinnedToCore(audioTask, "audio",
+  4096, nullptr, configMAX_PRIORITIES - 1, nullptr, 0)`. The stack-size comment is about
+  the per-voice arrays.
+- `audioTask()`: `xSemaphoreTake(g_paramsMutex, 0)` reuses last block's values when the lock
+  is busy. After a short `write()` it calls `vTaskDelay(1)`, and the comment explains the
+  frozen-`loop()` failure it prevents.
+- `synth/controls.h` `OscParams`: all shared fields in one struct, with the "must be
+  published together" comment.
+- `plans/2026-09-06_max_voices_and_distortion_headroom.md`, *Context*: the measured
+  `Task watchdog got triggered: IDLE0` at ~90% duty that shaped the whole design.
+- `CLAUDE.md` *Tech stack*: the one-paragraph statement of the single-core arrangement.
+
+## Stretch
+
+- Replace the mutex with a lock-free double buffer and a sequence counter. Measure whether
+  anything changes.
+- Add a high-water-mark check (`uxTaskGetStackHighWaterMark`) and print the audio task's real
+  stack use.

@@ -1,0 +1,126 @@
+---
+id: 16-beyond
+title: "Beyond (optional capstone)"
+weeks: open
+prereqs: [15-instrument-models]
+milestones:
+  - id: m16-pick
+    text: "You've picked one capstone project below and written its acceptance criteria before starting."
+  - id: m16-budget
+    text: "It runs within the audio contract: the measured load and RAM are printed, and the liveness LED never stalls."
+  - id: m16-done
+    text: "Your acceptance criteria pass on hardware, and you've written a short note on what you'd do differently."
+---
+
+## Goal
+
+Go past the reference synth with one self-directed project, using everything from modules
+00–15.
+
+## You'll be able to
+
+- Scope, budget and validate a DSP feature on your own, with no reference answer.
+- Read primary sources (papers, the CCRMA books) and turn them into fixed-point firmware.
+
+## Concepts
+
+Each project has its own:
+
+- **Random harmonic phases.** Lower crest factor means more headroom and a less "buzzy"
+  sum of detuned voices.
+- **Room / reverb.** Comb and all-pass networks (Schroeder, Freeverb), and delay memory
+  against the RAM budget.
+- **Karplus-Strong.** A delay line plus a lowpass in a feedback loop: a physical model of a
+  plucked string with real decay and inharmonic detail that tables can't give you.
+- **Per-voice envelopes.** Each chord note has its own life, as in a real piano.
+- **External control (MIDI).** The C3's native USB is a serial/JTAG port, not a USB-MIDI
+  device, and the board has no GPIO left. Bridging serial to MIDI on the host is the
+  practical path.
+
+## Read
+
+Pick the readings for your project.
+
+- **Random phases:** `plans/2026-09-11_realistic_instrument_dynamics.md`, *Phase 6*;
+  revisit the module 01 phase experiment.
+- **Reverb:** J. O. Smith III, *Physical Audio Signal Processing*, **"Artificial
+  Reverberation"**, then the **"Schroeder Reverberators"** and **"Freeverb"** pages
+  (≈3 h).
+- **Karplus-Strong:**
+  - K. Karplus & A. Strong, "Digital Synthesis of Plucked-String and Drum Timbres",
+    *Computer Music Journal* 7(2):43–55, 1983 (≈1.5 h)
+  - J. O. Smith III, *PASP*, **"The Karplus-Strong Algorithm"** (≈1 h)
+  - Pirkle, *Designing Software Synthesizer Plugins in C++* 2e, **ch 13 Karplus-Strong
+    Plucked String Model** (≈2 h)
+- **Per-voice envelopes:** Pirkle **ch 3 Synth Voices, Synth Modules, and Module Cores**
+  (≈1.5 h).
+- **MIDI over serial:** the *hairless-midiserial* bridge (projectgus.github.io), plus the
+  MIDI 1.0 message format (note on/off, CC) from any MIDI primer (≈1 h).
+
+## Explore (notebook)
+
+Write `16-capstone.ipynb` yourself. Start with a float prototype of your feature in numpy,
+render audio, and only then port it. *Examples:*
+- **Reverb:** the impulse response and decay (RT60) of your comb/all-pass network.
+- **Karplus-Strong:** the decay time against pitch, and the effect of the loop filter.
+- **Random phases:** the peak against RMS for 32 detuned voices, with aligned versus random
+  phases.
+
+## Play (playground)
+
+Optional: add a page to the site for your feature, following the pattern of the earlier labs.
+
+## Build
+
+Pick **one**.
+
+**Add (examples of acceptance criteria):**
+
+- **Random harmonic phases.** *Example:* the boot log shows each table's peak/RMS dropping by
+  at least 2 dB, the 9-voice "PULS" patch sounds no worse, and you can raise its level by the
+  gained headroom.
+- **Room.** *Example:* a Schroeder reverb (4 combs + 2 all-pass) on the mix at 22 kHz, with a
+  wet/dry amount per patch. RAM for delay lines ≤ 32 KB, total load still ≤ 60%. *Example*
+  log line: `reverb: 4 combs (1116..1617 samp), 2 AP, 27.6 KB, +410 cyc/frame`.
+- **Karplus-Strong voice.** *Example:* a new "KS" spectrum type whose voices use a delay line
+  instead of a table. A note at 110 Hz decays over ~3 s, pitch accuracy is within ±5 cents
+  (fractional delay), and you reach 8 voices within budget.
+- **Per-voice envelopes.** *Example:* in a 3-voice piano chord, the top note decays twice as
+  fast as the bottom one. Report the load difference against a single shared envelope.
+- **MIDI in over USB serial.** *Example:* a host bridge sends note-on/off. The synth plays the
+  received note as the root (overriding the pitch pot), and note-off releases.
+
+**Constraints:**
+
+- The audio contract, as always.
+- State your RAM and cycle budget before you start, and report the measured numbers at the
+  end.
+
+**Deliverable:** the feature, your acceptance criteria, and the measured budget.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+Write your own. At minimum:
+
+1. What does this cost per sample, per block and in RAM, and where exactly does it sit in the
+   chain?
+2. What's the simplest version that would convince you it works?
+3. What's the failure mode if it misbehaves on the audio task, and how do you bound it?
+
+## Compare (spoiler)
+
+There's no reference answer for most of these, by design.
+
+- `plans/2026-09-11_realistic_instrument_dynamics.md`: *Phase 6 (random harmonic phases)*
+  and *Phase 7 (room)* are planned but not implemented in the repo, so you'd be ahead of it.
+- `synth/audio_task.cpp`: the one-envelope-per-patch design (`s_ampEnvelope`) is what
+  per-voice envelopes would replace.
+
+## Stretch
+
+- Do a second project.
+- Write the playground page for your feature, so the course grows with you.

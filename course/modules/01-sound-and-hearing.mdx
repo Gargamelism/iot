@@ -1,0 +1,135 @@
+---
+id: 01-sound-and-hearing
+title: "Sound & hearing"
+weeks: 1
+prereqs: []
+milestones:
+  - id: m01-wavs
+    text: "You've rendered the reference WAV set (sine, saw, square, triangle at A3 = 220 Hz, plus a 3-voice chord) and listened to each on headphones."
+  - id: m01-spectra
+    text: "For each WAV, you can point to every harmonic on its spectrum plot and say what its relative level in dB should be."
+  - id: m01-phase
+    text: "You've confirmed by ear that scrambling the harmonics' phases changes the waveform's shape but not (much) its sound."
+  - id: m01-missing
+    text: "You've heard the 'missing fundamental': a tone with harmonics 2–8 only still sounds at the fundamental's pitch."
+  - id: m01-db
+    text: "You can convert between amplitude ratios and dB in your head for ×2, ×10 and ×0.5."
+---
+
+## Goal
+
+Build a working model of what a musical sound physically is and how the ear reads it, so every
+later design choice has something to aim at.
+
+## You'll be able to
+
+- Describe a periodic sound as a fundamental plus harmonics, and predict its spectrum.
+- Use dB for amplitude ratios and cents for pitch ratios fluently.
+- Explain why pitch is heard logarithmically and loudness roughly logarithmically.
+- Distinguish what the ear is sensitive to (the spectrum and how it changes) from what it
+  mostly ignores (static phase relationships).
+
+## Concepts
+
+- **Waves.** Pressure, frequency, period, amplitude, and simple harmonic motion.
+- **The harmonic series**, and why a vibrating string or air column produces one.
+- **Timbre** as a spectral envelope *plus* how it changes in time (attack, decay and vibrato
+  come later in the course).
+- **Decibels.** `20·log10(a2/a1)` for amplitudes: +6 dB is about ×2, +20 dB is ×10.
+- **Pitch perception.** Equal *ratios* sound like equal steps. Octaves, semitones and cents
+  (1/1200 of an octave). The missing fundamental.
+- **Loudness perception.** Roughly logarithmic, and frequency-dependent (equal-loudness
+  contours).
+- **Phase.** For steady tones the ear is largely phase-deaf. Hold on to that for module 07.
+
+## Read
+
+**Core (≈6.5 h)**
+
+- Downey, *Think DSP*, **ch 1 Sounds and signals**: work through the code (≈2 h).
+- Gordon Reid, *Synth Secrets* **part 1: "What's In A Sound?"** (≈0.5 h).
+- Loy, *Musimathics* Vol. 1, **ch 1 Music and Sound** and **ch 4 Physical Basis of Sound**
+  (≈3 h).
+- Loy, *Musimathics* Vol. 1, **ch 6 Psychophysical Basis of Sound**: the sections on pitch
+  and loudness (≈1 h).
+
+**Optional**
+
+- Heller, *Why You Hear What You Hear*, **Part I** (foundations) and the pitch chapters of
+  **Part III** (perception).
+- UNSW, **"What is a decibel?"** (phys.unsw.edu.au/jw/dB.html).
+
+## Explore (notebook)
+
+`01-sound.ipynb`:
+
+1. Synthesize 1 s of a sine at 220 Hz, then sums of harmonics with 1/n, odd-only 1/n and odd
+   1/n² amplitudes (saw, square and triangle). Plot two periods of each, plus a log-magnitude
+   spectrum.
+2. **Phase test.** Render the saw with random harmonic phases. Plot it (it looks nothing like
+   a saw) and listen to it A/B against the original.
+3. **Missing fundamental.** Render harmonics 2–8 of 220 Hz with no 220 Hz component. Compare
+   its pitch to a 220 Hz sine.
+4. **dB drill.** Write `db(a)` and `amp(db)` and tabulate the saw's harmonic levels in dB.
+5. **Write the reference set** to WAV (16-bit, 44.1 kHz): sine, saw, square, triangle at
+   220 Hz, plus an A minor triad of sines. Later modules compare your hardware's recorded
+   output against these.
+
+**Aha:** "timbre" is mostly *which harmonics, how loud*. The waveform's shape is a poor guide.
+
+## Play (playground)
+
+**Harmonic ear trainer.**
+- 16 harmonic toggles with level sliders and a fundamental slider.
+- A "drop fundamental" switch and a "scramble phases" button.
+- A live waveform and spectrum.
+- You should hear the pitch stay put when the fundamental drops out, and the waveform change
+  wildly under "scramble phases" while the sound barely does.
+
+**Reuses** the `AnalyserNode` spectrum view from `web_sim/analyzer.js`. **New:** the
+additive engine.
+
+## Build
+
+**No firmware this week.** You build the reference material the hardware will be judged
+against.
+
+**Add:**
+
+- **A reference WAV set** in a `reference/` folder. *Example* file names: `sine_220.wav`,
+  `saw_220.wav`, `square_220.wav`, `triangle_220.wav`, `am_triad.wav`.
+- **A one-page "ear sheet"** of your own notes: the formulas you'll reuse (Hz ↔ MIDI, cents,
+  dB). *Example* lines:
+  - `cents = 1200·log2(f2/f1)`
+  - `MIDI = 69 + 12·log2(f/440)`
+  - `dB = 20·log10(a2/a1)`
+
+**Deliverable:** the reference WAVs plus the ear sheet.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. If phase barely matters for steady tones, what does that buy you when you build waveforms
+   to fit in a 16-bit range (module 07)?
+2. Pitch is logarithmic. What does that suggest about how a pitch knob should map rotation to
+   Hz (module 05)?
+3. Loudness is logarithmic too. Should a volume knob be linear in amplitude? Note what you'd
+   guess now and check it in module 05.
+
+## Compare (spoiler)
+
+There's no firmware to compare, but look at where these ideas show up:
+
+- `synth/harmonic_spreads.h`: `weightSaw`, `weightSquare` and `weightTriangle` are this
+  week's notebook in C++.
+- `synth/notes.h`: `freqToMidi` and `midiToFreq` are your ear-sheet formulas.
+- `scripts/harmonics_demo.py`: the repo's own Python exploration of harmonic recipes.
+
+## Stretch
+
+- Record a real instrument (or a phone recording of one) and compare its spectrum with your
+  synthetic saw. What's different besides the harmonic levels?
+- Read *Synth Secrets* part 14, "An Introduction to Additive Synthesis", ahead of module 07.

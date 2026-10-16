@@ -1,0 +1,158 @@
+---
+id: 12-filters
+title: "Filters & brightness"
+weeks: 1
+prereqs: [11-envelopes]
+milestones:
+  - id: m12-response
+    text: "With a fixed cutoff of 1 kHz, a recorded (or notebook-simulated with your exact integer code) sweep shows −3 dB near 1 kHz and a 6 dB/octave slope above it."
+  - id: m12-pluck
+    text: "A pluck patch starts bright and audibly darkens as it decays, like a real string."
+  - id: m12-loudness
+    text: "A brass-like patch gets brighter as the volume pot goes up, not just louder."
+  - id: m12-bypass
+    text: "A patch configured as 'open' is bit-exact identical to the unfiltered signal (verify by comparing samples or by ear on a saw)."
+  - id: m12-lowcut
+    text: "At the lowest cutoff, the filter's output still settles to its input on a DC step (no 'stuck short' error from fixed-point truncation)."
+---
+
+## Goal
+
+Add a low-pass filter whose cutoff moves with time and loudness, so sounds change brightness
+the way acoustic instruments do.
+
+## You'll be able to
+
+- Read and write a difference equation, and derive a one-pole low-pass's coefficient from a
+  cutoff frequency.
+- Plot and interpret magnitude response (dB per octave, −3 dB point).
+- Implement a recursive filter in fixed point without precision traps.
+- Drive the cutoff from an envelope and from a performance control.
+
+## Concepts
+
+- **Difference equations.** FIR versus IIR. The one-pole low-pass `y[n] = y[n−1] + k·(x[n] −
+  y[n−1])` (the same form as module 05's EMA).
+- **Coefficient from cutoff.** `k = 1 − e^(−2π·fc/fs)`. At `fc ≥ fs/2`, set `k = 1` for an
+  exact bypass.
+- **Frequency response.** The −3 dB point and a 6 dB/octave slope. Why one pole is "gentle"
+  and synth filters are often 4-pole and resonant.
+- **Fixed-point IIR.** The state needs extra fractional bits. Without them, small steps
+  truncate to zero and the output gets stuck short of its target.
+- **Brightness as articulation.**
+  - A pluck's high harmonics die faster than its low ones, which you can model as a falling
+    cutoff.
+  - Brass gets brighter when played louder, which you can model as cutoff scaled by
+    loudness.
+- **A filter envelope.** A second envelope, triggered with the amp envelope, mapped to a
+  cutoff range.
+
+## Read
+
+**Core (≈6 h)**
+
+- J. O. Smith III, *Introduction to Digital Filters*, **"The Simplest Lowpass Filter"**
+  chapter, and in "Elementary Audio Digital Filters" the **one-pole** section (≈2 h).
+- S. W. Smith, *DSP Guide*, **ch 19 Recursive Filters**, through "Single Pole Recursive
+  Filters" (≈1.5 h).
+- Nigel Redmon, EarLevel, **"A one-pole filter"**, revisited now as a filter rather than a
+  smoother (≈0.3 h).
+- Pirkle, *Designing Software Synthesizer Plugins in C++* 2e, **ch 12 Synthesizer Filters**:
+  the opening sections, on filter basics and the one-pole designs (≈1.5 h).
+- Gordon Reid, *Synth Secrets* **part 4 "Of Filters & Phase Relationships"** (≈0.5 h).
+
+**Optional**
+
+- S. W. Smith, *DSP Guide*, **ch 14 Introduction to Digital Filters**.
+- Lyons, *Understanding DSP* 3e, **ch 12** (finite word-length effects in filters).
+
+## Explore (notebook)
+
+`12-filters.ipynb`:
+
+1. Implement the one-pole in float. Plot its magnitude response (from an impulse response FFT)
+   against the analytic `|H|` for fc = 200, 1,000 and 5,000 Hz.
+2. **Coefficient table.** For fc from 100 Hz to 20 kHz, print `k` and `k` in Q16. *Example:*
+   fc = 1 kHz gives k ≈ 0.1328, which is 8,703 in Q16.
+3. **Fixed point.** Implement the integer version with 0 and 8 extra state bits. Feed a DC
+   step at fc = 100 Hz and plot where each settles.
+4. **Pluck darkening.** Apply a filter whose cutoff falls with a decaying envelope to a saw,
+   then show the spectrogram.
+5. **Loudness tracking.** Map volume to cutoff and render the same note at three volumes.
+   Compare their spectral centroids.
+
+## Play (playground)
+
+**Brightness lab.**
+- A saw or a spectrum from module 07 through a one-pole low-pass.
+- Sliders: cutoff min and max, filter-envelope ADSR, and a "volume" control that opens the
+  cutoff.
+- A gate button, a live spectrum, and a response-curve overlay.
+- You should hear a pluck "close" as it decays, and brass "open" as volume rises.
+
+**Reuses** the module 11 ADSR engine and the module 07 oscillator. **New:** the filter and
+the response plot.
+
+## Build
+
+Start from module 11.
+
+**Add:**
+
+- **A low-pass on the signal path** (on the mix, or per voice: your call). The coefficient is
+  updated at block rate and the filter runs per sample in integer math. *Example API*
+  (illustrative):
+
+  ```cpp
+  int32_t coeffQ16(float cutoffHz);           // block rate
+  struct OnePole { int32_t k, y; int16_t process(int16_t x); };  // per sample
+  ```
+- **Per-patch tone settings:** cutoff min and max, plus a filter envelope. *Examples:*
+  - pluck: `{env {1, 300, 20, 150}, 600 Hz .. 10 kHz}`, bright snap, dull within ~0.3 s
+  - brass: `{env {80, 0, 100, 100}, 1.5 kHz .. 8 kHz}`, opens as it speaks
+  - open: `min = max = fs/2`, bypassed
+- **Volume → brightness.** *Example mapping:* `cutoff = min + (max − min) · envGain · (0.3 +
+  0.7 · volume)`.
+- **A debug print** at block rate, throttled. *Example:* `tone: env 0.42 vol 0.80 -> 3610 Hz
+  (k 0.401)`.
+
+**Constraints:**
+
+- No floats per sample.
+- The bypass must be *exact* (bit-identical), so "open" patches cost nothing in quality.
+- No precision trap at low cutoffs (milestone m12-lowcut).
+
+**Deliverable:** a filter unit, per-patch tone configs, and the filter envelope wired to note
+events.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. Filter per voice or on the mix? With one envelope per patch, does per-voice filtering buy
+   you anything?
+2. Before or after the amplitude envelope, and before or after distortion (module 14)? Does
+   the order change the sound?
+3. How many extra state bits do you need at your lowest cutoff? Derive it rather than guess.
+4. Is a one-pole enough? What would a resonant 2-pole (state-variable) filter cost per sample?
+
+## Compare (spoiler)
+
+- `synth/tone.h` and `tone.cpp`:
+  - `ToneConfig` holds `{filter envelope, cutoffMinHz, cutoffMaxHz}`.
+  - `toneCutoffHz()` is the volume-scaled mapping, `0.3 + 0.7 · volume`.
+  - `toneCoefficientQ16()` returns exactly `1 << 16` at or above Nyquist (bit-exact bypass).
+  - `OnePoleLowpass` carries `kStateFracBits` = 8.
+- `synth/audio_task.cpp`: one `s_toneFilter` on the **mixed** signal, *after* the amp gain,
+  and an `s_filterEnvelope` triggered with the amp envelope.
+- `synth/voices.h`: `kToneOpen`, `kTonePluck`, `kToneStruck`, `kToneBrass` and `kToneReed`.
+- `plans/2026-09-11_realistic_instrument_dynamics.md`, *Phase 2*.
+
+## Stretch
+
+- A Chamberlin state-variable filter with resonance, in fixed point. Measure the cycles and
+  listen for instability at high cutoffs.
+- Key tracking: make the cutoff follow the note's pitch so high notes aren't dulled more than
+  low ones.

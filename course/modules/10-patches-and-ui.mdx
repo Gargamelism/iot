@@ -1,0 +1,153 @@
+---
+id: 10-patches-and-ui
+title: "Patches, encoder & OLED"
+weeks: 1
+prereqs: [05-controls, 09-music-theory-in-code]
+milestones:
+  - id: m10-cycle
+    text: "Each encoder click switches to the next patch (and wraps around), both directions, and the sound changes immediately."
+  - id: m10-oled
+    text: "The OLED shows the patch name, the current root note and a volume bar, readable on the 72×40 glass, updating ~10×/s."
+  - id: m10-validate
+    text: "A deliberately bad patch entry (unknown spectrum, or too many voices) fails the build with a clear message."
+  - id: m10-ram
+    text: "Wavetables are built for every spectrum used by any patch, not just the first, and the boot log shows the total within budget."
+  - id: m10-safe
+    text: "Spinning the encoder fast while playing never crackles, glitches the display or resets the board."
+---
+
+## Goal
+
+Turn the synth into an instrument with presets: a compile-time table of patches, validated by
+the compiler, selected by the encoder and shown on the OLED.
+
+## You'll be able to
+
+- Describe an instrument as data (`constexpr` tables) and derive everything else from it.
+- Use `static_assert` and `constexpr` functions to make invalid data a build error.
+- Switch the active patch safely while the audio task is running.
+- Lay out a tiny status display and refresh it without disturbing audio.
+
+## Concepts
+
+- **Data-driven design.** One table row per patch: voices (offset, spectrum, level), pitch
+  mode, scale, and later envelope, tone, vibrato and distortion. Code iterates the table and
+  never names a specific patch.
+- **Compile-time validation.** `constexpr` loops over the table inside `static_assert`.
+  Bounds, enums in range, counts.
+- **Resource derivation.** The set of spectra to build at boot is the *union* over all patches,
+  and each spectrum's highest reachable pitch decides its top table.
+- **Patch switching across threads.** The index changes in `loop()`. The audio task applies
+  it at a block boundary, rebuilds its per-voice state, and never sees a new voice count with
+  old frequencies.
+- **OLED refresh.** I2C is slow (a full-frame transfer takes milliseconds). Rate-limit it, and
+  never let it block on the shared lock.
+- **Tiny layouts.** A 72×40 window, a 6×8 px font: 12 characters × 5 rows at most.
+
+## Read
+
+**Core (≈3.5 h)**
+
+- cppreference, **`constexpr` specifier** and **`static_assert` declaration** (C++17 rules
+  for constexpr functions and loops) (≈1 h).
+- Adafruit, **"Adafruit GFX Graphics Library"**: the text, `getTextBounds` and
+  `fillRect` sections, revisited (≈0.5 h).
+- Adafruit_SSD1306 library examples (`ssd1306_128x64_i2c`) skimmed for `display()` and
+  buffer semantics (≈0.5 h).
+- *Mastering the FreeRTOS Real Time Kernel*, **ch 8 Resource Management**, revisit the
+  mutex and "gatekeeper task" ideas with patch switching in mind (≈1.5 h).
+
+## Explore (notebook)
+
+`10-patches.ipynb` (short):
+
+1. Write your patch table as a Python list of dicts. Compute the union of spectra, the highest
+   frequency each must reach (pot max + largest offset + vibrato margin), the mip levels per
+   spectrum, and the total RAM.
+2. Explore "what if": add a patch with a voice two octaves up and watch the RAM change.
+3. Mock the OLED: render your planned layout as a 72×40 bitmap with a 6×8 font and check it
+   fits.
+
+## Play (playground)
+
+**OLED layout bench.**
+- A 72×40 pixel canvas with a 6×8 character grid overlay, editable text rows and a volume bar
+  widget.
+- Live fields bound to simulated knobs (root note, volume, patch name).
+- You should see the truncation problems before they're on the glass.
+
+**Reuses** `drawDisplay` and the OLED canvas from `web_sim/app.js`. **New:** the editable
+layout.
+
+## Build
+
+Start from module 09.
+
+**Add:**
+
+- **A patch table.** Each row has a voice list, a pitch mode (diatonic or detuned unison), a
+  scale and a label. *Example* (illustrative):
+
+  ```cpp
+  struct Patch { const Voice* voices; uint8_t count; PitchMode mode; Scale scale; const char* label; };
+  constexpr Patch kPatches[] = {
+    {kTriad,  3, DIATONIC, MINOR,     "HARM"},
+    {kUnison, 3, UNISON,   CHROMATIC, "UNI3"},
+  };
+  ```
+- **Compile-time checks.** *Example* failure message: `static_assert failed: "a patch's voice
+  count is out of [1, MAX_VOICES]"`.
+- **Encoder → patch** with wrap, using your module 05 step counter. *Example:*
+  `patch 4/12 GTR (1 voice, DIA, harm. minor)`.
+- **An OLED status screen.** *Example* layout:
+
+  ```
+  SYNTH
+  C#3 ########
+  GTR  1v DIA
+  ```
+- **Boot-time table building** for every spectrum any patch uses. *Example:* `tables: 7
+  spectra, 38 tables, 77824 B (budget 131072)`.
+
+**Constraints:**
+
+- The audio task picks up a patch change at a block boundary, and its voice count, levels
+  and frequencies must all belong to the same patch.
+- The display update never blocks audio and never waits long for the shared lock. Skip a
+  frame instead.
+- Adding a patch means adding a table row only. No other code changes.
+
+**Deliverable:** a patch table, the validation, encoder selection and the status display.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. What *must* change atomically with the patch index? List the fields.
+2. A patch change resets oscillator phases: is the resulting click acceptable, or do you
+   crossfade? What would a crossfade cost?
+3. What belongs in the table, and what should stay a build-time `#define`?
+4. How often must the display refresh to feel live, and how long does one refresh actually
+   take? Measure it.
+
+## Compare (spoiler)
+
+- `synth/voices.h`: `Patch`, `kPatches`, `NUM_PATCHES`, and the `constexpr` validators
+  `allPatchVoiceCountsInRange()` and `allPatchSpreadsInRange()` in `static_assert`s.
+  `patchSpreadsMixed()` drives the display's "*" marker.
+- `synth/audio_task.cpp` `applyPatch()`: it re-points the oscillators and renormalizes levels,
+  called when `patchIndex` changes, *before* computing the block's volumes. The comment there
+  accepts the phase-reset click.
+- `synth/controls.cpp` `controlsUpdate()`: `patchIndex` and `freqHz[]` are published in one
+  lock. `updateEncoderRotation()` wraps through `NUM_PATCHES`.
+- `synth/display.cpp`: `snapshotStatus()` *skips* a refresh if the lock isn't free within
+  5 ms. Also `drawRootRow()`, `drawVoiceRow()`, `drawSettingsRow()`, and
+  `DISPLAY_REFRESH_MS` 100 in `pins.h`.
+- `synth/oscillator.cpp` `initWavetables()`: builds the union over `kPatches`.
+
+## Stretch
+
+- A long-press on the encoder button to show a second page (voice details).
+- A `DISABLE_DISPLAY` build flag (the repo has one): measure how much CPU the display costs.

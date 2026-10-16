@@ -1,0 +1,148 @@
+---
+id: 08-polyphony-and-mixing
+title: "Polyphony & mixing"
+weeks: 1
+prereqs: [07-band-limited-wavetables]
+milestones:
+  - id: m08-chord
+    text: "Three voices play a fixed chord (e.g. root, major third, fifth) that follows the pitch pot, each with its own spectrum and level."
+  - id: m08-noclip
+    text: "At full volume, with 1, 3, 8 and 32 voices, the recorded or printed output peak never reaches full scale, and nothing crackles."
+  - id: m08-detune
+    text: "A 3-voice unison at −7, 0 and +7 cents produces audible slow beating or chorus, and the beat rate matches your calculation."
+  - id: m08-budget
+    text: "With 32 voices the audio task's load is printed and stays under your budget (≤ 50% of 3,628 cycles per frame is the reference's comfort zone)."
+---
+
+## Goal
+
+Run many voices at once, each with its own pitch, spectrum and level, mixed so the output can
+never clip, whatever the voice count.
+
+## You'll be able to
+
+- Structure per-voice state and a mixer for N voices within a cycle budget.
+- Guarantee headroom mathematically rather than hope for it.
+- Use cents for detune and predict beat rates.
+- Explain why unison detune "thickens" a sound.
+
+## Concepts
+
+- **Voices.** An oscillator plus its frequency, spectrum and level. Use a fixed-size array, so
+  there's no allocation.
+- **Summing.** Peaks add linearly in the worst case, while uncorrelated RMS grows like √N.
+  Which one do you design for?
+- **Headroom strategies.** (a) Scale each voice by 1/N. (b) Normalize relative levels so they
+  sum to 1. (c) Accept occasional clipping with a soft limiter. Each changes loudness as N
+  changes in a different way.
+- **Q15 mixing.** Accumulate in 32 bits, scale and saturate once at the end.
+- **Cents and ratios.** `ratio = 2^(cents/1200)`. Two tones Δf apart beat at Δf Hz.
+- **Unison and chorus.** Small detunes give slow amplitude beating and a wider sound. Real
+  pianos have 2–3 strings per note.
+- **Voice management.** This synth triggers all voices together (a "patch" of voices). The
+  textbooks discuss voice *allocation* for keyboards, which you don't need here (yet).
+
+## Read
+
+**Core (≈5.5 h)**
+
+- Pirkle, *Designing Software Synthesizer Plugins in C++* 2e, **ch 4 Synth Operational
+  Modes: Polyphony and Voice-Stealing** (≈2 h).
+- Puckette, *TTEM*, **4.4 Polyphony** and **4.5 Voice allocation** (≈1 h).
+- Gordon Reid, *Synth Secrets* **part 20: "Introducing Polyphony"** (≈0.5 h).
+- Loy, *Musimathics* Vol. 1, **ch 6 Psychophysical Basis of Sound**: the sections on beats
+  and roughness (consonance/dissonance) (≈1.5 h).
+- UNSW, **"Interference beats and Tartini tones"** (newt.phys.unsw.edu.au/jw/beats.html)
+  (≈0.5 h).
+
+## Explore (notebook)
+
+`08-mixing.ipynb`:
+
+1. Sum N = 1…32 sines with random phases. Plot the peak and RMS against N, with the √N and N
+   curves overlaid.
+2. Compare the three headroom strategies: for each, plot the output loudness (RMS in dBFS)
+   against N. Which keeps a 3-voice chord as loud as one voice?
+3. **Beats.** Render 220 Hz + 220 Hz·2^(7/1200) and measure the envelope period. Check it
+   against Δf.
+4. **Unison spread.** Spectrogram of 3 and 7 detuned saws. Where does "chorus" turn into "out
+   of tune"?
+5. **Q15 mixer.** Implement the integer mix in numpy, and prove (or brute-force) that your
+   strategy's worst case never exceeds int16.
+
+## Play (playground)
+
+**Voice mixer.**
+- 1–16 voices, each with a pitch offset (semitones + cents), a spectrum dropdown and a level.
+- A normalization mode switch (none, 1/N, sum-to-one) and a clip LED.
+- Presets: "major triad", "piano unison", "supersaw".
+- You should hear "none" clip as voices are added, and "1/N" get quieter per voice.
+
+**Reuses** the module 07 harmonic-lab oscillator engine. **New:** the multi-voice mixer UI.
+
+## Build
+
+Start from module 07 (one band-limited oscillator).
+
+**Add:**
+
+- **N voices** (up to 32), each with its own frequency offset, spectrum and relative level.
+  *Example* voice table (illustrative):
+
+  ```cpp
+  struct Voice { int semitones; int cents; int spectrum; uint8_t level; };
+  constexpr Voice kChord[] = {{0, 0, SAW, 100}, {4, 0, SQUARE, 80}, {7, 0, SAW, 70}};
+  ```
+- **Fixed intervals** above the pot's root, for now in semitones. Module 09 makes them follow
+  a key. *Example:* root A3 (220 Hz), +4 semitones = C#4 (277.2 Hz), +7 = E4 (329.6 Hz).
+- **Detune in cents.** *Example:* +10 cents is a ratio of 1.00579. At 220 Hz that's
+  1.27 Hz above, so you hear ~1.3 beats per second against an undetuned voice.
+- **A no-clip guarantee.** At full volume, the mix of *any* voice count must fit in int16.
+  *Example* check printed at boot: `mix: 3 voices, level sum 32767/32767, worst-case peak
+  32000 OK`.
+- **The load meter** extended per voice. *Example:* `audio: 32 voices, 455 cyc/frame
+  (12.5%)`.
+
+**Constraints:**
+
+- Per-voice levels are applied with integer math on the per-sample path.
+- Computing levels and normalization happens when the voice set changes, not per sample.
+- No allocation: voice storage has a fixed maximum size.
+
+**Deliverable:** a multi-voice engine plus mixer, with the headroom rule written in a comment
+next to the code that enforces it.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. Which headroom strategy did you pick, and what happens to perceived loudness when you go
+   from 1 to 6 voices?
+2. Truncation or rounding when you normalize levels? Which one makes the "sum ≤ 1" guarantee
+   hold exactly?
+3. Is a hard ceiling on voices (and a compile-time check against it) worth it? What would
+   you check?
+4. Your oscillator costs about X cycles. At 32 voices, how much budget is left for envelopes,
+   filters and distortion?
+
+## Compare (spoiler)
+
+- `synth/oscillator.cpp` `normalizeVoiceLevelsQ15()`: levels are normalized to sum to at most
+  `VOLUME_Q15_ONE`, *truncating* so the bound holds for any count. `mixOscillators()`
+  accumulates in `int32` and clamps once. The comment in `oscillator.h` states the guarantee.
+- `synth/voices.h`: `VoiceConfig`, `MAX_VOICES` 32 with its cycle-budget comment, and the
+  `static_assert(allPatchVoiceCountsInRange())` check.
+- `kVoicesPiano`: three voices at −2, 0 and +2 cents ("like a real piano's unison").
+  `kVoicesPulse` and `kVoicesHarsh` are detuned stacks.
+- `synth/controls.cpp` `updateVoiceFreqs()`, the `PITCH_UNISON_DETUNE` branch: the cents are
+  converted to ratios once per patch change (`s_detuneRatio`), not per update.
+- `plans/2026-09-06_max_voices_and_distortion_headroom.md`: the reasoning and measurements
+  behind 32 voices and the no-clip mix.
+
+## Stretch
+
+- Stereo: spread the voices across L/R on the DAC (the amp will still sum them). How does a
+  detuned unison sound in headphones?
+- A soft limiter instead of strict normalization: louder chords, but at what cost?

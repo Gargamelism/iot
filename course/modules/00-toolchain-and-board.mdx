@@ -1,0 +1,153 @@
+---
+id: 00-toolchain-and-board
+title: "Toolchain & board"
+weeks: 1
+prereqs: []
+milestones:
+  - id: m00-compile
+    text: "An empty sketch compiles from the command line for the ESP32-C3 with USB CDC On Boot enabled."
+  - id: m00-blink
+    text: "The onboard LED blinks at 1 Hz (remember: it's active-low)."
+  - id: m00-serial
+    text: "A boot message printed in setup() actually appears in the Serial Monitor after a reset, every time."
+  - id: m00-oled
+    text: "The OLED shows a 1-pixel frame exactly around the visible 72×40 glass and a line of text inside it, with nothing cut off at any edge."
+  - id: m00-pinmap
+    text: "You've written your own pin map: every GPIO on the board, what it's tied to, and which ones are free for audio and controls."
+---
+
+## Goal
+
+Get from an empty folder to firmware you can build, flash and observe on this specific board,
+and learn exactly which pins you have to work with.
+
+## You'll be able to
+
+- Build and flash an ESP32-C3 sketch from the command line, with the right board options.
+- Use the serial console reliably on a native-USB chip.
+- Drive the built-in OLED, including this board's odd visible window.
+- Read a board's pinout and datasheet and produce a pin budget before wiring anything.
+
+## Concepts
+
+- **The Arduino-ESP32 stack.** `arduino-cli` → board package (`esp32:esp32`, core 3.x) → FQBN
+  `esp32:esp32:esp32c3` → board options. **USB CDC On Boot** moves `Serial` from UART0 to the
+  native USB port, and that frees GPIO20/21.
+- **The C3.** One RISC-V core at 160 MHz, ~400 KB SRAM and no floating-point unit (this will
+  matter from module 02 on).
+- **Strapping pins and reserved pins.** Learn what is soldered to what on *this* board: OLED
+  on GPIO5/6, LED on GPIO8, BOOT button on GPIO9, flash on GPIO11–17, USB on GPIO18/19.
+- **Active-low outputs.** The LED is on when the pin is LOW.
+- **The SSD1306.** The controller has a 128×64 buffer, but the 0.42" glass shows only a 72×40
+  window at an offset. The Adafruit library knows nothing about that offset.
+- **USB enumeration delay.** Prints made right after reset can vanish before the host has
+  opened the port.
+
+## Read
+
+**Core (≈3.5 h)**
+
+- Arduino, **arduino-cli "Getting started"** (arduino.github.io/arduino-cli): installing
+  cores and libraries, compiling and uploading (≈0.5 h).
+- Espressif, **Arduino-ESP32 "Getting Started"** and the **GPIO** API page
+  (docs.espressif.com/projects/arduino-esp32) (≈1 h).
+- Espressif, **ESP32-C3 Series Datasheet**: the *Pins* chapter (pin overview and the strapping
+  pins section) and the ADC rows of the peripheral pin table (≈1 h).
+- Adafruit, **"Adafruit GFX Graphics Library"** guide: coordinates, text and drawing
+  primitives (≈1 h).
+
+**Optional**
+
+- Espressif, **ESP32-C3 Technical Reference Manual**: the *IO MUX and GPIO Matrix* chapter,
+  for how any peripheral signal can be routed to (almost) any pin.
+
+## Explore (notebook)
+
+No notebook this module. Set up the Python environment (`numpy`, `scipy`, `matplotlib`,
+`sounddevice`, `jupyter`) and check it runs. Module 01 starts using it.
+
+## Play (playground)
+
+**OLED window finder.**
+- Shows a 128×64 SSD1306 buffer with a draggable 72×40 "glass" rectangle on top.
+- You draw text and shapes in buffer coordinates and see what the glass would show, with the
+  offset readout updating as you drag.
+- You should see why anything drawn at (0,0) is invisible on this board.
+
+**Reuses** the OLED renderer (`drawDisplay`) from `web_sim/app.js`. **New:** the draggable
+window.
+
+## Build
+
+**Add:**
+
+- **A reproducible build.** One documented command line that compiles and one that flashes,
+  with USB CDC On Boot enabled. *Example:*
+
+  ```
+  arduino-cli compile --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc synth
+  arduino-cli upload  --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc -p /dev/cu.usbmodem1101 synth
+  ```
+- **The liveness blink.** The LED toggles every 500 ms from `loop()`. Later this proves
+  `loop()` is still running while the audio task works. *Example:* with `millis()` you can
+  blink without `delay()`, so `loop()` never stalls.
+- **A boot banner** on Serial that always arrives. *Example:*
+
+  ```
+  boot: ESP32-C3 rev 0.4, 160 MHz, free heap 297412 bytes
+  ```
+- **OLED hello.** Find the window offset yourself: draw a 1-pixel rectangle and nudge it until
+  all four edges are visible. Then print a title inside it. *Example* of the visible window:
+
+  ```
+  +----------------------+
+  |SYNTH                 |
+  |hello                 |
+  +----------------------+   (72 x 40 px)
+  ```
+- **A pin map** as a header of `#define`s or `constexpr`s, with a comment per pin saying why it
+  was chosen. *Example:* `constexpr int PIN_STATUS_LED = 8;  // onboard, active-low`.
+
+**Constraints:**
+
+- Don't use `delay()` in `loop()` except while debugging this week. From module 04 on,
+  `loop()` must stay responsive.
+- Every pin you plan to use must be justified against the reserved and strapping pin list.
+  Plan for: 3 I2S lines, 2 ADC inputs, 3 encoder lines and 1 switch.
+
+**Deliverable:** a sketch folder (`synth/synth.ino` and your pin header) that blinks, prints
+and draws, plus your written pin map.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. Which pins can read analog values *and* aren't taken by the OLED? How many does that leave
+   for two pots?
+2. You need 9 GPIOs (3 I2S, 2 pots, 3 encoder, 1 switch). Can you fit them without GPIO20/21?
+   What does freeing those cost you?
+3. Where do you want the I2S lines physically, given where the DAC and amp sit on your
+   breadboard? Does the GPIO matrix let you choose?
+4. Why might an early `Serial.println` in `setup()` go missing, and what's the least hacky
+   way to make sure it arrives?
+
+## Compare (spoiler)
+
+- `synth/pins.h`: the reference pin map. Its header comment lists every reserved pin. Note
+  `PIN_STATUS_LED` 8, the I2S lines on 4/7/10 (kept on the amp side of the package), the pots
+  on 0/3, the encoder on 1/2/20 and the gate switch on 21.
+- `OLED_X_OFFSET` 30 and `OLED_Y_OFFSET` 24 in `pins.h`, and the comment in `display.cpp`
+  about shifting every draw. Is your offset the same?
+- `synth/synth.ino`: the `delay(200)` after `Serial.begin` and its comment about USB
+  enumeration, plus the `millis()`-based blink with `BLINK_HALF_PERIOD_MS`.
+- `README.md`: the "System requirements" and "Setup" sections are the repo's version of your
+  build instructions.
+
+## Stretch
+
+- Wrap compile and upload in a `Makefile` or a shell script, with the port auto-detected
+  from `arduino-cli board list`.
+- Print the chip's reset reason at boot (`esp_reset_reason()`). You'll want it the first time
+  the watchdog bites in module 04.

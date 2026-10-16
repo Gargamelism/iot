@@ -1,0 +1,141 @@
+---
+id: 13-modulation
+title: "Modulation: vibrato & tremolo"
+weeks: 0.5
+prereqs: [11-envelopes]
+milestones:
+  - id: m13-vibrato
+    text: "A sustained note starts plain, then after ~250 ms a vibrato fades in. A tuner shows the pitch swinging by about your configured depth."
+  - id: m13-tremolo
+    text: "A flute-like patch has a gentle amplitude wobble (tremolo) at the same rate."
+  - id: m13-restart
+    text: "Every new note (gate or new root) restarts the delay and onset, so each note begins plain."
+  - id: m13-clean
+    text: "Vibrato at its deepest setting on the highest note still shows no aliasing or table-boundary artefacts."
+---
+
+## Goal
+
+Make sustained notes feel *played*: a low-frequency oscillator that adds vibrato (pitch) and
+tremolo (amplitude), fading in after the note starts.
+
+## You'll be able to
+
+- Build an LFO and apply it to pitch (in cents) and to amplitude.
+- Explain why a delayed, fading-in vibrato sounds human and a constant one sounds mechanical.
+- Reason about modulation at block rate: is 172 Hz update rate enough for a 6 Hz LFO?
+- Keep modulation from pushing voices past their band-limited range.
+
+## Concepts
+
+- **LFO.** A sine (or other shape) at 3–8 Hz, its phase advanced per block.
+- **Vibrato.** Frequency × `2^(depth·lfo/1200)`. Players use roughly 5–7 Hz and ±10–50 cents.
+- **Tremolo.** Gain × `(1 − depth·(0.5 + 0.5·lfo))`. Flutes have a lot of it.
+- **Onset shaping.** Hold the depth at 0 for a delay, then ramp it in over an onset time.
+  Restart both on every note.
+- **Sidebands.** FM at audio rates creates sidebands. At LFO rates it's just a slow pitch
+  wobble, but it still needs headroom in your mip-map (module 07).
+- **Block-rate modulation.** Updating the frequency every 5.8 ms stair-steps the pitch. Can
+  you hear it at 6 Hz?
+
+## Read
+
+**Core (≈3.5 h)**
+
+- Gordon Reid, *Synth Secrets* **part 10 "Modulation"** and **part 11 "Amplitude
+  Modulation"** (≈1 h).
+- Pirkle, *Designing Software Synthesizer Plugins in C++* 2e, **ch 6 Modulation: Theory and
+  Calculations** (≈1 h, skim) and **ch 8 Low Frequency Oscillators** (≈1.5 h).
+
+**Optional**
+
+- N. H. Fletcher, **"Acoustical correlates of flute performance technique"**, *JASA* 57
+  (1975), free PDF from the ANU open repository. It finds flute vibrato is mostly amplitude
+  modulation of the upper partials at about 5 Hz, which is why the flute preset leans on
+  tremolo.
+- Gordon Reid, *Synth Secrets* **part 51 "Articulation & Bowed-string Synthesis"**: adding
+  vibrato by hand as a performance control.
+
+## Explore (notebook)
+
+`13-modulation.ipynb`:
+
+1. Render 2 s of a 330 Hz saw with vibrato at 5.5 Hz ±25 cents: plain, with a 300 ms delay,
+   and with delay plus a 200 ms onset. Listen to all three.
+2. Track the pitch of each (zero crossings or STFT peak) and plot it against time.
+3. **Block-rate staircase.** Recompute the same vibrato with the frequency updated every 256
+   samples. Overlay its pitch track and listen for a difference.
+4. **Headroom.** Compute the highest frequency a voice reaches at max pot + max offset + max
+   vibrato depth, and check it against your mip-map's top level.
+
+## Play (playground)
+
+**Vibrato lab.**
+- Rate, depth (cents), delay, onset and tremolo % sliders, plus a gate button.
+- A live pitch trace and an amplitude trace.
+- Presets: reed (5 Hz, 10 c, little tremolo), flute (5.5 Hz, 25 c, 15% tremolo), bowed
+  string (wider, slower onset).
+- You should hear the difference between "always on" and "fades in after the attack".
+
+**Reuses** the module 11 envelope lab. **New:** the LFO and the traces.
+
+## Build
+
+Start from module 12.
+
+**Add:**
+
+- **One LFO per patch**, configured from the table, restarted on each note. *Example* config
+  (illustrative):
+
+  ```cpp
+  struct Vib { float rateHz; uint8_t depthCents; uint16_t delayMs, onsetMs; uint8_t tremoloPct; };
+  constexpr Vib kFlute = {5.5f, 25, 250, 200, 15};
+  constexpr Vib kNone  = {0, 0, 0, 0, 0};
+  ```
+- **Pitch modulation** as a multiplier applied to every voice's frequency at block rate.
+  *Example:* ±25 cents is a ratio from 0.98567 to 1.01454.
+- **Amplitude modulation**, multiplying the envelope's block gain (so the per-sample ramp
+  smooths it too).
+- **A debug line.** *Example:* `vib: onset 0.63, pitch x1.0091, amp x0.94`.
+
+**Constraints:**
+
+- The LFO runs at block rate. Floats are allowed there.
+- Nothing new on the per-sample path. Reuse the existing gain ramp and the frequency set.
+- Your mip-map headroom must cover the deepest vibrato on the highest note.
+
+**Deliverable:** an LFO unit, per-patch vibrato configs, and wiring into pitch and gain.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. Should vibrato phase reset on every note? What does a random starting phase sound like?
+2. Does a patch switch mid-note restart the vibrato?
+3. Should vibrato depth scale with volume (players often add vibrato on louder, longer
+   notes)?
+4. You apply vibrato to *every* voice in the same phase. What would per-voice phase offsets
+   do to a chord?
+
+## Compare (spoiler)
+
+- `synth/vibrato.h` and `vibrato.cpp`: `VibratoConfig` holds `{rateHz, depthCents, delayMs,
+  onsetMs, tremoloPercent}`. `advanceBlock()` computes the onset fade, then
+  `pitchMultiplier_` (via `exp2f`) and `amplitudeMultiplier_`. `noteOn()` resets the phase
+  and onset, and `configure()` deliberately doesn't (question 2).
+- `synth/audio_task.cpp`: `s_vibrato.advanceBlock()` runs once per block, its amplitude
+  multiplier scales `targetGainQ15`, and `pitchMultiplier` is applied in each voice's
+  `setFrequency()`.
+- `synth/oscillator.cpp` `maxMipLevelForSpread()`: `kDetuneMarginCents` and
+  `kDiatonicMarginSemitones` cover vibrato and snapping.
+- `synth/voices.h`: `kVibratoReed`, `kVibratoFlute`, `kVibratoBrass`, `kVibratoBowed`,
+  `kVibratoPlucked` and the deliberately extreme `kVibratoAlien`.
+
+## Stretch
+
+- Add a little random drift ("jitter") to the LFO rate and depth, and judge whether it's more
+  natural.
+- Pitch "scoop": a short upward glide at note-on, as brass players do.

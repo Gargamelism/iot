@@ -1,0 +1,145 @@
+---
+id: 02-digital-audio
+title: "Digital audio"
+weeks: 1
+prereqs: [01-sound-and-hearing]
+milestones:
+  - id: m02-alias
+    text: "You've predicted, then confirmed in the notebook, where a 30 kHz sine lands when sampled at 44.1 kHz."
+  - id: m02-bits
+    text: "Your notebook's measured quantization SNR for 8, 12 and 16 bits is within 1 dB of 6.02·N + 1.76."
+  - id: m02-q15
+    text: "Your host-side Q15 helpers pass your own checks: multiply, saturate, and the edge cases (−1 × −1, rounding, overflow)."
+  - id: m02-wrap
+    text: "You've heard the difference between an int16 that wraps and one that saturates when overdriven."
+---
+
+## Goal
+
+Understand what a stream of 16-bit numbers at 44.1 kHz can and can't represent, and learn the
+fixed-point arithmetic you'll use on a chip without a floating-point unit.
+
+## You'll be able to
+
+- State the sampling theorem and predict where any frequency aliases to.
+- Relate bit depth to dynamic range and quantization noise.
+- Represent fractions as Q15 integers, then multiply, scale and saturate them correctly.
+- Explain why a per-sample `float` multiply is expensive on the ESP32-C3.
+
+## Concepts
+
+- **Sampling.** `fs`, Nyquist (`fs/2`), and **aliasing**: `f` and `fs − f` are
+  indistinguishable after sampling. Reconstruction and the DAC's anti-imaging filter.
+- **Quantization.** N bits give about 6 dB per bit. Quantization noise and dither (briefly).
+- **Integer audio.** `int16_t` samples from −32768 to 32767, and headroom.
+- **Fixed point.** In Qm.n formats, Q15 means 1 sign bit and 15 fraction bits (0x7FFF ≈
+  0.99997). Multiplying two Q15s gives a Q30 in 32 bits; shift right by 15 to get back.
+  Rounding versus truncation.
+- **Overflow.** Two's-complement *wraparound* is a loud discontinuity; *saturation* clamps.
+- **No FPU.** On the C3, `float` math is a software library call: tens of cycles per
+  operation. Floats are fine once per block and not fine per sample.
+
+## Read
+
+**Core (≈6 h)**
+
+- S. W. Smith, *DSP Guide*, **ch 3 ADC and DAC**: quantization, the sampling theorem,
+  analog filters (≈2 h).
+- S. W. Smith, *DSP Guide*, **ch 4 DSP Software**: number representation, fixed versus
+  floating point, execution speed (≈1.5 h).
+- Downey, *Think DSP*, **ch 11 Modulation and sampling**: the aliasing and sampling
+  sections (≈1.5 h).
+- Randy Yates, **Fixed-Point Arithmetic: An Introduction**, sections 1–4 (≈1 h).
+
+**Optional**
+
+- Lyons, *Understanding DSP* 3e, **ch 2 Periodic Sampling** and **ch 12 Digital Data
+  Formats and their Effects**.
+
+## Explore (notebook)
+
+`02-digital.ipynb`:
+
+1. **Aliasing table.** For sines at 10, 21, 23, 30 and 40 kHz sampled at 44.1 kHz, predict the
+   apparent frequency, then verify with an FFT.
+2. **Sweep.** Plot the apparent frequency against the true frequency from 0 to 88.2 kHz (the
+   "folding" sawtooth).
+3. **Quantization.** Quantize a full-scale sine to N = 4…16 bits. Plot the measured SNR against
+   N next to `6.02·N + 1.76`.
+4. **Q15 in numpy.** Implement `q15_mul` with `np.int32` and compare it with float over 10⁵
+   random pairs. Plot the error histogram for truncation versus rounding.
+5. **Wrap vs saturate.** Drive a sine at 1.5× full scale. Write one WAV that wraps (cast to
+   int16) and one that clips, and listen to both.
+
+**Aha:** the digital world is periodic in frequency, and integers are periodic in amplitude.
+Both bite if you forget it.
+
+## Play (playground)
+
+**Aliasing & bits lab.**
+- A sine-frequency slider from 0 to 60 kHz. The output is "sampled" at a selectable `fs` and
+  you hear the alias, with a number line that shows the fold at `fs/2`.
+- A bit-depth slider from 2 to 16 bits with a dither toggle.
+- You should hear the pitch go *down* as the slider goes *up* past Nyquist.
+
+**New:** everything. A small AudioWorklet does sample-and-hold resampling plus
+requantization.
+
+## Build
+
+**Host-side C++ this week**, not the board. It builds the arithmetic you'll trust for the rest
+of the course.
+
+**Add:**
+
+- **A small fixed-point header** for your project. *Example* (illustrative only):
+
+  ```cpp
+  constexpr int Q15_SHIFT = 15;
+  constexpr int16_t Q15_ONE = 0x7FFF;
+  inline int16_t sat16(int32_t x) { return x > 32767 ? 32767 : x < -32768 ? -32768 : x; }
+  inline int16_t q15mul(int16_t a, int16_t b) { return sat16(((int32_t)a * b) >> Q15_SHIFT); }
+  ```
+- **Self-checks** in a `main()` you compile with `g++` on your computer. *Examples:*
+
+  ```
+  q15mul(Q15_ONE, 16384) -> 16383   (≈ 0.5)
+  q15mul(-32768, -32768) -> 32767   (saturated, not -32768)
+  sat16(40000)           -> 32767
+  ```
+
+**Constraints:**
+
+- No floats inside `q15mul` and `sat16`.
+- No undefined behavior: watch out for left-shifting negative numbers and for signed overflow.
+
+**Deliverable:** the header plus a test program that prints PASS or FAIL per check.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. Your output is 16-bit. How much of that range will you reserve for headroom when several
+   voices add up, and what does that cost in dB of signal-to-noise?
+2. Truncation or rounding after a Q15 multiply? Where does the bias of truncation matter, and
+   where could it actually *help* (think: guaranteeing a sum can't exceed a bound)?
+3. Should "1.0" be 0x7FFF or 0x8000 in your scheme? What breaks with each?
+
+## Compare (spoiler)
+
+- `synth/pins.h`: `VOLUME_Q15_SHIFT` = 15 and `VOLUME_Q15_ONE` = 32767 (so "1.0" is
+  0x7FFF). The comment explains the no-FPU reasoning.
+- `synth/oscillator.cpp` `normalizeVoiceLevelsQ15()`: truncation is chosen *on purpose* so
+  that the sum of levels can never exceed one. That answers question 2.
+- `synth/audio_task.cpp`: the comment above `gainStepFixed` explains multiplying instead of
+  left-shifting a possibly negative difference (the UB trap).
+- `synth/test/`: the repo's host-side test runner (`run.sh`, `framework.h`). Compare it with
+  your own self-check program.
+
+## Stretch
+
+- Benchmark on the device: time 10,000 `float` multiplies against 10,000 `int32` multiplies
+  with `esp_cpu_get_cycle_count()`.
+- Add TPDF dither to the 8-bit quantization in the notebook and listen to it.

@@ -1,0 +1,189 @@
+---
+id: 15-instrument-models
+title: "Instrument acoustics & modelling"
+weeks: 1.5
+prereqs: [07-band-limited-wavetables, 12-filters, 13-modulation]
+milestones:
+  - id: m15-five
+    text: "At least five instrument patches (e.g. guitar, piano, clarinet, flute, trumpet, a Hammond registration), each with its spectrum, envelope, brightness and vibrato chosen from sources."
+  - id: m15-cited
+    text: "Every instrument spectrum in your code has a comment naming its source (book chapter or measured-spectrum page)."
+  - id: m15-formant
+    text: "At least one model has a resonance fixed in Hz, and you've verified that sweeping the pitch moves the harmonics *through* it (the timbre changes with register, as on the real instrument)."
+  - id: m15-spectrum-match
+    text: "(If recording) Your clarinet's recorded spectrum at C4 is plotted against the UNSW measured C4 spectrum, and the odd/even pattern matches."
+  - id: m15-blind
+    text: "A blind test: someone else names at least three of your patches' instruments without being told."
+---
+
+## Goal
+
+Use real acoustics data to make patches that *read* as specific instruments, by combining
+spectra from physics with the envelopes, brightness and vibrato you've built.
+
+## You'll be able to
+
+- Derive a plucked or struck string's spectrum from where it's excited.
+- Explain why a clarinet's low register favors odd harmonics and a flute is nearly a sine.
+- Model resonances (formants) that are fixed in Hz rather than in harmonic number.
+- Read a Hammond drawbar registration as a harmonic recipe.
+- Combine spectrum, envelope, filter and vibrato into a convincing patch, and say what
+  single-cycle wavetables *can't* do.
+
+## Concepts
+
+- **Strings.**
+  - Plucking at fraction *p* of the length gives `Aₙ ∝ sin(nπp)/n²`. Harmonics with a node at
+    the pluck point vanish: at p = 1/5, harmonics 5, 10, 15 and so on.
+  - Striking (a piano hammer) imparts velocity, so `Aₙ ∝ sin(nπp)/n`, and the hammer's
+    contact time low-passes the spectrum further.
+- **Unison strings.** A piano has 2–3 slightly detuned strings per note, so it beats (module
+  08).
+- **Woodwinds.**
+  - The clarinet is a closed cylindrical bore, so odd harmonics are strong in the low
+    register, and the odd/even gap closes higher up.
+  - The flute is an open pipe driven by an air jet: few harmonics, falling fast.
+- **Brass.** A lip-reed source with the bell as a radiating high-pass. The spectral peak sits
+  around a fixed frequency (a *formant*), and the spectrum gets brighter with loudness
+  (module 12).
+- **Formants.**
+  - Body or radiation resonances stay at fixed Hz, so a low note and a high note get different
+    spectra.
+  - Evaluate them at each table's pitch range (module 07's "Hz-dependent weights").
+- **Hammond drawbars.** Nine drawbars at fixed harmonics (16′, 5⅓′, 8′, 4′, 2⅔′, 2′, 1⅗′, 1⅓′,
+  1′), each step about 3 dB. A registration like "00 8040 000" is a harmonic recipe.
+- **The limits of single-cycle tables.** No inharmonicity (piano strings are slightly
+  stretched), no evolving spectrum beyond the filter, and no transients like breath, bow or
+  pick noise.
+
+## Read
+
+**Core (≈9 h, spread over 1.5 weeks)**
+
+- Fletcher & Rossing, *The Physics of Musical Instruments* 2e:
+  - **ch 2** (the vibrating-string sections: plucked and struck strings) (≈1.5 h)
+  - **ch 9 Guitars and lutes** (≈1 h, skim)
+  - **ch 12 The piano**, on the hammer and string sections (≈1 h)
+  - **ch 14 Lip-driven brass instruments**, spectra and radiation (≈1 h)
+  - **ch 15 Woodwind reed instruments** (≈1 h)
+  - **ch 16 Flutes and flue organ pipes** (≈1 h)
+- J. Wolfe et al., UNSW Music Acoustics, **"Clarinet acoustics: an introduction"**, **"Flute
+  acoustics"** and **"Brass instrument acoustics"**, plus at least one measured note
+  spectrum page (e.g. clarinet C4) (≈1.5 h).
+- Dan Russell (Penn State), **"Fourier series of a plucked string"** demo
+  (acs.psu.edu/drussell) (≈0.3 h).
+- S. Vorkoetter, **"The Science of Hammond Organ Drawbar Registration"**, and HammondWiki
+  **"Drawbars"** (≈0.7 h).
+
+**Optional**
+
+- Gordon Reid, *Synth Secrets*: **part 25 "Synthesizing Brass Instruments"**, **part 28
+  "Synthesizing Plucked Strings"**, **part 42 "Synthesizing Pianos"**, **part 53
+  "Synthesizing Simple Flutes"** and **part 55 "Synthesizing Tonewheel Organs: Part 1"**.
+- HyperPhysics, **"Orchestral instruments"** page for formant frequencies.
+
+## Explore (notebook)
+
+`15-instruments.ipynb`:
+
+1. **Pluck position.** Plot `|sin(nπp)|/n²` for p = 1/2, 1/5 and 1/12. Listen to each as a
+   wavetable and note which harmonics vanish.
+2. **Struck vs plucked.** Compare 1/n and 1/n² falloff at p = 1/8, with and without a hammer
+   low-pass term.
+3. **Clarinet from data.** Read the UNSW C4 spectrum (dB per harmonic) into a table, convert it
+   to linear, build the table and listen. Then try G5. How does the odd/even pattern change?
+4. **Formant fixed in Hz.** Apply a 1.3 kHz formant to a 1/√n source at 150, 300 and 600 Hz.
+   Plot which harmonic is loudest at each pitch.
+5. **Hammond.** Convert "888000000" and "00 8040 000" into harmonic amplitudes in dB, using
+   the measured per-step levels.
+6. **(If recording)** Compare your hardware patch's recorded spectrum against the source data
+   it was built from.
+
+## Play (playground)
+
+**Instrument model lab.**
+- Pick a model (pluck, strike, clarinet, flute, brass, drawbars), each with its own parameters:
+  pluck position, hammer width, formant centre/width/boost, or drawbar sliders.
+- Plays across a 2-octave keyboard so you hear register-dependent timbre.
+- Shows the harmonic bar chart *per note*, so you can watch a formant stay put while the
+  harmonics move.
+- You should hear the guitar's pluck-position "nasal versus round" change, and brass get
+  brighter at low notes, where more harmonics fall under the formant.
+
+**Reuses** the module 07 table builder plus the module 11–13 envelope, filter and vibrato
+engines. **New:** the model functions and the drawbar UI.
+
+## Build
+
+Start from module 13 (or 14). Everything is in place except the spectra.
+
+**Add:**
+
+- **Instrument spectra as weight functions**, each with its source in a comment. *Examples*
+  (illustrative):
+
+  ```cpp
+  // Plucked string at p = 1/5: harmonics 5, 10, 15 vanish.
+  // Source: F&R 2e ch 2; Russell, "Fourier series of a plucked string".
+  float guitar(int n) { return fabsf(sinf(M_PI * n * 0.2f)) / (n * n); }
+
+  // Clarinet C4, linear from UNSW dB readings (n = 1..8 shown).
+  constexpr float kClarinet[] = {1.00, 0.06, 0.35, 0.05, 0.22, 0.06, 0.16, 0.07 /* ... */};
+  ```
+- **At least one Hz-fixed resonance.** *Example:* a trumpet formant near 1.3 kHz, a gain bump
+  on a log-frequency axis, applied to each harmonic's frequency at the table's centre pitch.
+- **Complete patches** that pair each spectrum with an envelope, tone, vibrato and voicing.
+  *Examples:*
+  - GTR: pluck spectrum + pluck envelope + darkening tone + slow, light vibrato
+  - PNO: struck spectrum + 3 voices at −2/0/+2 cents + struck envelope
+  - CLR: clarinet table + reed envelope (speaks a little late) + very little vibrato
+  - FLT: flute table + soft attack + vibrato that's mostly tremolo
+  - TIB: Hammond "00 8040 000" + organ on/off envelope
+- **A boot report** listing the patches. *Example:* `patches: 22, spectra: 12, tables:
+  94 KB`.
+
+**Constraints:**
+
+- No new per-sample cost. All of this is table-building at boot plus existing per-block
+  machinery.
+- The RAM budget still holds with all instrument spectra built.
+- Every spectrum names its source.
+
+**Deliverable:** five or more convincing instrument patches, sourced and documented.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. Which properties are tied to *harmonic number* (pluck point, bore) and which to *Hz*
+   (body, bell, radiation)? How does your weight function receive the information it needs?
+2. Measured spectra are for one note at one loudness. How do you extend them across the pitch
+   range: the same table everywhere, or Hz-fixed formants plus a source falloff?
+3. Your piano has no inharmonicity. Can you hear it? What would it take to add?
+4. Which instruments are impossible to fake convincingly without attack transients, and why?
+
+## Compare (spoiler)
+
+- `synth/harmonic_spreads.h`, *Instrument models*:
+  - `weightGuitar()` (p = 0.2, `sin/n²`) and `weightPiano()` (p = 1/8, `sin/n` × the hammer
+    low-pass).
+  - `weightClarinet()` (a UNSW-derived table × a 1.6 kHz formant) and `weightFlute()` (an
+    8-entry table × an 800 Hz formant).
+  - `weightTrumpet()` (`1/√n` × a 1.3 kHz formant) and `weightHammond()` (drawbar digits →
+    measured dB per position).
+  - Every function carries its sources, and `formant()` is the Hz-fixed resonance shape.
+- `synth/oscillator.cpp` `buildTable()`: weights are evaluated at `mipLevelCentreHz()`, so a
+  formant is placed per octave.
+- `synth/voices.h`: the patch rows GTR, GTR2, PNO, PNO2, CLR, CLR2, FLT, FLT2, TPT, TPT2,
+  TIB, TIB2, HTP and HTP2, pairing each spread with `kEnv*`, `kTone*` and `kVibrato*`.
+- `plans/2026-09-11_realistic_instrument_dynamics.md`, especially *Not achievable with
+  single-cycle wavetables*, for the honest limits.
+
+## Stretch
+
+- A velocity-dependent spectrum: build two tables per instrument (soft and loud) and crossfade
+  them with volume.
+- Pick an instrument the repo doesn't have (bassoon, marimba, harpsichord) and build it from
+  F&R and measured spectra.

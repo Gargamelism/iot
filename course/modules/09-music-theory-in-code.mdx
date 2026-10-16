@@ -1,0 +1,153 @@
+---
+id: 09-music-theory-in-code
+title: "Music theory in code"
+weeks: 1
+prereqs: [08-polyphony-and-mixing]
+milestones:
+  - id: m09-snap
+    text: "Sweeping the pitch pot steps through notes of the key only, with no out-of-key note and no flicker between neighbors."
+  - id: m09-quality
+    text: "In a major key, a 3-voice stack of degrees 0/2/4 gives major chords on I, IV and V, minor on ii, iii and vi, and diminished on vii, and you can hear and name each."
+  - id: m09-modes
+    text: "At least four modes can be selected (at compile time is fine), e.g. major, natural minor, harmonic minor and minor pentatonic, and each sounds as expected."
+  - id: m09-negative
+    text: "Voices with negative degrees, or degrees above an octave, land on the right notes (check with the tuner)."
+  - id: m09-retrigger
+    text: "Each time the pot crosses to a new root, an event is produced (print it), ready for the envelope in module 11."
+---
+
+## Goal
+
+Make the voices play *music*: a pitch pot that snaps to a key, and chords whose quality follows
+the root's position in the scale, all computed rather than stored.
+
+## You'll be able to
+
+- Convert between Hz, MIDI note numbers and cents, in 12-tone equal temperament.
+- Represent scales and modes as interval patterns and index them by scale degree, including
+  negative degrees and degrees beyond the octave.
+- Explain why stacking scale *degrees* (not semitones) gives diatonic chord qualities for
+  free.
+- Snap a continuous control to the nearest in-key note.
+
+## Concepts
+
+- **12-TET.** `f = 440 · 2^((m − 69)/12)`. Why equal temperament is a compromise: compare just
+  intervals (5:4, 3:2) with their 12-TET versions in cents.
+- **Scales as patterns.** Major `{0,2,4,5,7,9,11}`, natural minor, harmonic minor, melodic
+  minor, Phrygian, minor pentatonic (5 notes!) and chromatic.
+- **Scale degrees.** Index with floor division and modulo so that degree −1 is the note below
+  the root, not a wrap to the top.
+- **Diatonic harmony.** Stacking degrees 0/2/4 on each root gives the triad qualities
+  (I ii iii IV V vi vii°). In code, the chord quality is *derived*, never stored.
+- **Snapping.** Map continuous MIDI onto the nearest degree in the mode, with care at the
+  boundaries (hysteresis from module 05 helps).
+- **Events from continuous input.** A "new note" is when the snapped degree *changes*.
+
+## Read
+
+**Core (≈5.5 h)**
+
+- Loy, *Musimathics* Vol. 1, **ch 3 Musical Scales, Tuning, and Intonation**: equal-tempered
+  scale, just intervals, the cent scale and tempered tuning systems (≈3 h).
+- Dave Benson, *Music: A Mathematical Offering*, **ch 5 Scales and temperaments: the fivefold
+  way**: the first sections, through equal temperament (≈1.5 h).
+- musictheory.net, **Lessons**: the scales, modes and diatonic triads lessons, as a quick
+  refresher (≈1 h).
+
+**Optional**
+
+- Benson, **ch 6 More scales and temperaments**.
+
+## Explore (notebook)
+
+`09-scales.ipynb`:
+
+1. **Tuning table.** For unison through octave, list the just ratio, the 12-TET ratio and the
+   difference in cents. Which interval is worst?
+2. **Beats of tempered thirds.** At A3, compute the beat rate between a 12-TET major third's
+   5th harmonic and the root's 4th harmonic. That beating is part of what a "piano" sounds
+   like.
+3. **Scale-degree math.** Implement `degree_to_semitone(degree, mode)` with floor-div/mod and
+   test it on degrees −8…+15 in every mode.
+4. **Chord quality table.** For each mode, stack 0/2/4 on every degree and classify each
+   triad (major, minor, diminished, augmented) by its semitone pattern.
+5. **Snap.** Implement `snap(midi, mode)` and plot the pot position against the snapped
+   degree. Then add hysteresis and show the boundary stops flickering on noisy input.
+
+## Play (playground)
+
+**Key explorer.**
+- Pick a key root and a mode. A virtual pitch knob sweeps and snaps.
+- Shows the current root, the chord notes, the chord quality and a piano-keyboard view.
+- A voice-offset editor sets the degree for each voice.
+- You should hear the chord *quality* change as the root moves, with no table of chords
+  anywhere.
+
+**Reuses** `freqToNoteName` and `mapPitchHz` from `web_sim/app.js`, and the module 08
+mixer. **New:** the scale engine and the keyboard view.
+
+## Build
+
+Start from module 08 (N voices at fixed semitone offsets).
+
+**Add:**
+
+- **A key and mode.** A compile-time key root and a set of modes. *Example:* key root E2
+  (MIDI 40), modes `MAJOR, MINOR, HARMONIC_MINOR, PHRYGIAN, PENTATONIC_MINOR, CHROMATIC`.
+- **A snapped root.** The pitch pot snaps to the nearest scale degree. *Example* in E natural
+  minor: a pot position that maps to 180 Hz (MIDI 53.5, between E3 and F#3) snaps to F#3
+  (185.0 Hz), degree 8.
+- **Voices offset in degrees.** *Examples:*
+  - In E natural minor, degrees 0/2/4 from E give E-G-B (minor), and from G give G-B-D
+    (major).
+  - In E harmonic minor (raised 7th, D#), 0/2/4 from B gives B-D#-F#: the major V chord that
+    natural minor lacks.
+- **Negative and wide degrees.** *Example:* degree −1 from E in E minor is D (one step down,
+  previous octave); degree 7 is E an octave up.
+- **A note-change event.** *Example:* `root F#3 (deg 8) -> chord F#3 A3 C4 (dim)`.
+
+**Constraints:**
+
+- The scale math runs in `loop()`, not in the audio task. The audio task receives
+  frequencies.
+- Recompute frequencies only when the snapped root or the voice set changes.
+- The scale math is host-testable: no Arduino headers in it.
+
+**Deliverable:** a scale unit (degree ↔ semitone ↔ Hz, plus snapping) and voices driven by it.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. A pentatonic scale has 5 degrees per octave, chromatic has 12. How does your code handle
+   "degrees per octave" varying by mode?
+2. Snapping: nearest semitone first and then nearest degree, or nearest degree directly?
+   What's the cheapest correct search?
+3. When the patch's pitch mode is "detuned unison", should the scale code run at all? How do
+   you make that obvious in the data?
+4. A new root is an event. Should moving the pot while the gate is *open* (silent) still
+   register it?
+
+## Compare (spoiler)
+
+- `synth/scale.h` and `scale.cpp`:
+  - `kScales` holds the interval patterns, with a per-mode `degreesPerOctave`, and
+    `floorDiv()` makes negative degrees walk downward.
+  - `scaleDegreeToSemitone()`, then `scaleDegreeToFreq()` via `notes.h` `midiToFreq()`.
+  - `snapMidiToScaleDegree()` searches only the degree either side of a rounded guess.
+  - `SCALE_KEY_ROOT_MIDI` is 40 (E2).
+  - `SCALE_NOT_WORKING` is how the table says "this patch ignores scales" (question 3).
+- `synth/controls.cpp` `updateVoiceFreqs()`, `PITCH_DIATONIC` branch: it recomputes only on a
+  new root, and the comment explains why offsets are in *degrees*. `s_retriggerSeq++` is the
+  note event, skipped for the boot or patch-switch sentinel.
+- `synth/test/test_scale.cpp`: the repo's host tests for this math.
+
+## Stretch
+
+- Alternative tunings: just intonation relative to the key root, or 19-TET. Listen for which
+  chords get better and which get worse.
+- Inversions or voicings: let a voice's degree wrap down an octave when it would go above a
+  ceiling.

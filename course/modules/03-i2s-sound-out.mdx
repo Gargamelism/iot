@@ -1,0 +1,149 @@
+---
+id: 03-i2s-sound-out
+title: "Getting sound out: I2S"
+weeks: 1
+prereqs: [00-toolchain-and-board, 02-digital-audio]
+milestones:
+  - id: m03-tone
+    text: "A steady 440 Hz tone plays from the speaker (amp) and the line out (DAC) at the same time."
+  - id: m03-pitch
+    text: "A tuner app reads A4 within ±2 cents."
+  - id: m03-clean
+    text: "Five minutes of tone with no clicks, dropouts or crackle, through headphones on the line out."
+  - id: m03-stereo
+    text: "You've proven the channel order: muting the left samples silences the left headphone, not the right."
+  - id: m03-recorded
+    text: "(If you have an audio interface) A recording of the line out, compared in the notebook with your 220/440 Hz reference sine, shows a clean single peak with no harmonics above −60 dB."
+---
+
+## Goal
+
+Get audio samples out of the chip, as a clean, correctly pitched tone through both the line-out
+DAC and the speaker amp.
+
+## You'll be able to
+
+- Explain the I2S frame: bit clock, word select (LR clock) and data, plus the one-bit delay.
+- Configure the ESP32-C3's I2S peripheral for 44.1 kHz, 16-bit stereo.
+- Wire two I2S receivers in parallel on the same three lines.
+- Produce a sine from a lookup table and feed the peripheral continuously.
+
+## Concepts
+
+- **I2S signals.** BCK (bit clock), LRCK/WS (word select), DIN/SD (data) and, optionally, MCLK.
+  At 44.1 kHz × 16 bits × 2 channels, BCK = 1.4112 MHz.
+- **Frame format.** MSB first, data one BCK after the WS edge (Philips standard), and left
+  while WS is low.
+- **The PCM5102A.** Its internal PLL lets it run without a master clock (tie SCK to GND).
+  Hardware-strapped options: FLT (filter), DEMP (de-emphasis), FMT (format), XSMT (soft
+  mute). It gives line-level out.
+- **The MAX98357A.** A class-D amp with I2S in, mono (it mixes L+R by default), fixed gain and
+  a speaker out.
+- **DMA and blocking writes.** The driver owns ring buffers. When they're full, `write()`
+  blocks, so *the DAC's clock paces your code*. That's the heartbeat of everything from
+  module 04 on.
+- **A sine from a table.** Compute `sin()` once into an `int16_t` table, then step through it.
+
+## Read
+
+**Core (≈4 h)**
+
+- Philips, **I²S bus specification** (1986, rev. 1996): the whole 7-page spec, timing
+  diagrams included (≈0.5 h).
+- Texas Instruments, **PCM5102A datasheet**: pin functions, the "Audio Data Interface"
+  timing, the "Hardware Control" table (FLT/DEMP/FMT/XSMT) and "PLL" (system clock absent)
+  sections (≈1 h).
+- Adafruit, **"Adafruit MAX98357 I2S Class-D Mono Amp"** guide, plus the MAX98357A
+  datasheet's channel-select and gain tables (≈0.5 h).
+- Espressif, **ESP-IDF Programming Guide (ESP32-C3) → Peripherals → I2S**: standard mode,
+  DMA buffers and the data bit width/slot sections (≈1.5 h).
+- Espressif, **Arduino-ESP32 I2S API** page (`ESP_I2S.h`, `I2SClass`) (≈0.5 h).
+
+**Optional**
+
+- Puckette, *TTEM*, **2.1 The Wavetable Oscillator**: preview of module 06.
+
+## Explore (notebook)
+
+`03-i2s.ipynb`:
+
+1. **Clock arithmetic.** For 44.1 and 48 kHz at 16, 24 and 32-bit slots, compute BCK, the
+   bytes per second and the bytes per 256-frame block.
+2. **Byte layout.** Build one interleaved stereo `int16` block in numpy (`L0 R0 L1 R1 …`) and
+   print its first 16 bytes in hex, little-endian. That is exactly what your `write()` sends.
+3. **Table resolution.** For a 256- versus 1,024-entry sine table read without interpolation,
+   estimate the worst harmonic distortion from the spectrum of a 440 Hz tone.
+4. **(If recording)** Load your line-out recording, align it, and plot its spectrum against
+   the reference sine from module 01.
+
+## Play (playground)
+
+**I2S scope.**
+- Enter a left and right sample (or drag a sine), and see BCK, WS and DATA drawn bit by bit,
+  with the MSB highlighted and the one-bit delay marked.
+- Toggles: Philips or left-justified, 16- or 32-bit slots.
+- You should be able to read a sample value off the DATA line by hand.
+
+**New:** everything (a timing-diagram renderer).
+
+## Build
+
+Start from module 00's sketch, still with no tasks (everything in `setup()`/`loop()`).
+
+**Add:**
+
+- **I2S output** at 44.1 kHz, 16-bit stereo, on your chosen three pins, wired to *both* the DAC
+  and the amp. *Example* wiring note for your pin header:
+
+  ```
+  BCK  -> PCM5102 BCK,  MAX98357 BCLK
+  LRCK -> PCM5102 LCK,  MAX98357 LRC
+  DOUT -> PCM5102 DIN,  MAX98357 DIN
+  PCM5102: SCK->GND, FLT/DEMP/FMT = L, XSMT = H
+  ```
+- **A sine table** built at boot and stepped through at 440 Hz. *Example:* a 1,024-entry table
+  at amplitude 32,000. The step per sample for 440 Hz is `1024 × 440 / 44100 ≈ 10.22`
+  entries. How you handle the fraction is up to you (module 06 does it properly).
+- **Continuous feeding.** Fill a block of interleaved stereo frames and write it, forever.
+  *Example:* 256 frames = 1,024 bytes = 5.8 ms of audio per write.
+- **A boot line.** *Example:* `i2s: 44100 Hz, 16-bit stereo, 256-frame blocks`.
+
+**Constraints:**
+
+- The output never stops: any gap is an audible click.
+- The level stays below full scale, so leave yourself a little headroom.
+- No `Serial` prints inside the feeding loop (try one to hear what it does, then remove it).
+
+**Deliverable:** a sketch that boots straight into a clean tone on both outputs.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. What block size will you write per call? Trade latency (control response) against
+   per-call overhead.
+2. The MAX98357A sums L+R and the DAC plays them separately. If you ever want true stereo,
+   what changes? For now, should L and R carry the same sample?
+3. You need a fractional step through the table. Float phase, fixed-point phase, or integer
+   steps with a slightly wrong pitch? (Module 06 settles this, so note your instinct now.)
+4. Why does a blocking `write()` make `delay()`-based timing unnecessary?
+
+## Compare (spoiler)
+
+- `synth/audio_task.cpp` `audioTaskBegin()`: `setPins()` and `begin(I2S_MODE_STD,
+  SAMPLE_RATE_HZ, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO)`.
+- `synth/pins.h`: the I2S comment block covering the parallel DAC and amp, and the
+  PCM5100's SCK and solder pads. `AUDIO_BLOCK_FRAMES` 256, `SINE_TABLE_SIZE` 1024 and
+  `SINE_TABLE_AMPLITUDE` 32000.
+- `synth/oscillator.cpp` `initSineTable()`: the boot-time table.
+- `player/player.ino`: a complete minimal I2S program (an embedded WAV clip scaled by the
+  volume pot). It's the simplest "known good" output test in the repo. Keep one like it around
+  for when you need to tell a wiring fault from a code fault.
+
+## Stretch
+
+- Port `player/`'s idea: play one of your module 01 reference WAVs from flash and compare the
+  recording against the file.
+- Try 48 kHz. What has to change, and does anything you can hear?

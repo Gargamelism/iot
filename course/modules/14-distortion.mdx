@@ -1,0 +1,161 @@
+---
+id: 14-distortion
+title: "Nonlinearity: distortion"
+weeks: 1
+prereqs: [08-polyphony-and-mixing]
+milestones:
+  - id: m14-flavors
+    text: "Four flavors (hard clip, soft clip, foldback, bitcrush) are each selectable per patch and audibly distinct."
+  - id: m14-toggle
+    text: "The encoder button toggles the active patch's distortion on and off instantly, with no click beyond the change in timbre itself."
+  - id: m14-bounded
+    text: "Driving any flavor as hard as possible never wraps around (no harsh 'crackle' from int16 overflow) and never takes the audio task over budget."
+  - id: m14-premix
+    text: "You've A/B'd distortion before the mix (per voice) against after the mix on a 3-voice chord, and can describe the difference (intermodulation)."
+---
+
+## Goal
+
+Add deliberate nonlinearity, in several flavors, safely and cheaply, and understand what it
+does to a spectrum (including to a chord).
+
+## You'll be able to
+
+- Predict which harmonics a waveshaper adds (odd vs even, how fast they fall).
+- Implement clipping, soft saturation, wavefolding and bit reduction in integer math, with
+  bounded cost.
+- Explain intermodulation and choose where in the chain to distort.
+- Recognize aliasing caused by nonlinearity, and decide whether it matters.
+
+## Concepts
+
+- **Waveshaping.** `y = f(x)` applied per sample. Its *transfer curve* determines the spectrum
+  it adds.
+- **Symmetry.** An odd-symmetric `f` (`f(−x) = −f(x)`) adds only odd harmonics. An asymmetric
+  `f` adds even harmonics too.
+- **Hard clip** (gain then clamp): many high harmonics, harsh.
+- **Soft clip.** A smooth curve such as cubic `x − x³/3` adds mostly the 3rd harmonic, so it
+  sounds warm.
+- **Foldback.** Reflect the signal at a threshold instead of clamping: metallic, rich and
+  pitch-dependent. Bound the loop for real-time safety.
+- **Bitcrush.** Zero the low bits to give quantization as an effect: noisy and lo-fi.
+- **Drive.** Gain before the shaper sets *how much* nonlinearity you get.
+- **Intermodulation.** Distorting a *sum* creates sum and difference tones between voices.
+  Distorting each voice separately doesn't.
+- **Nonlinearity aliases.** New harmonics above Nyquist fold back. Oversampling is the
+  textbook cure, and usually unaffordable here.
+- **No divides on the hot path.** The C3's hardware divide takes many cycles. Use a
+  multiply by a reciprocal instead.
+
+## Read
+
+**Core (≈4 h)**
+
+- Puckette, *TTEM*, **5.1 Taxonomy of spectra**, **5.2 Multiplying audio signals** and
+  **5.3 Waveshaping** (≈2 h).
+- J. O. Smith III, *Physical Audio Signal Processing*, **"Soft Clipping"** (the cubic
+  nonlinearity) and the surrounding nonlinear-elements pages (≈1 h).
+- Lyons, *Understanding DSP* 3e, **ch 12 Digital Data Formats and their Effects**: the
+  overflow and saturation sections. Optional if you don't own it; module 02 covered the core
+  (≈1 h).
+
+**Optional**
+
+- Puckette, **5.4 Frequency and phase modulation**: another nonlinearity family worth a look
+  for a future "FM" patch.
+
+## Explore (notebook)
+
+`14-distortion.ipynb`:
+
+1. Plot the transfer curves of hard clip, cubic soft clip, foldback and bitcrush at drive
+   1, 3 and 6.
+2. Feed a 220 Hz sine through each and plot the spectra. Confirm odd-only harmonics for the
+   symmetric shapers.
+3. **Asymmetry.** Add a DC offset before a soft clip and watch even harmonics appear.
+4. **Intermodulation.** Run an A-major triad of sines through a hard clip (a) after summing
+   and (b) per voice and then summed. Mark the sum and difference products.
+5. **Aliasing.** Hard-clip a 2 kHz sine at drive 6 and find the folded components. Then do it
+   again at 4× oversampling and compare.
+6. **Fixed-point cubic.** Implement the soft clip in Q15 with a Q16 reciprocal of 3, and check
+   its monotonicity and bound over all int16 inputs.
+
+## Play (playground)
+
+**Waveshaper lab.**
+- Pick a flavor, a drive amount, and per-voice or post-mix.
+- A transfer-curve plot with the live input point moving along it, plus the output spectrum.
+- A 1–4 voice chord on a selectable spectrum.
+- You should hear intermodulation "mud" on post-mix chords, and foldback's timbre change with
+  pitch.
+
+**Reuses** the module 08 mixer and module 07 spectra. **New:** the shapers and the curve
+plot.
+
+## Build
+
+Start from module 10 or later. Distortion only needs the mixer and the patch table.
+
+**Add:**
+
+- **Four flavors** plus "none", selected per patch. *Example* signatures (illustrative):
+
+  ```cpp
+  enum Dist { NONE, HARD, SOFT, FOLD, CRUSH };
+  int16_t distort(int16_t x, Dist d);  // integer only, bounded time
+  ```
+- **The encoder button** toggles the active patch's distortion. *Example:* `dist: SOFT on`.
+- **Concrete shapes.** *Examples:*
+  - hard: `clamp(x · 6)`
+  - soft: `x' = clamp(x · 6)`, then `x' − x'³/3` in Q15
+  - fold: reflect at ±12,000 (at most 8 reflections, then clamp)
+  - crush: zero the low 8 bits
+- **A placement choice**, per-voice or post-mix, stated in one place in the code. *Example:*
+  `#define DIST_STAGE_PRE_MIX`, with a compile error if both or neither are defined.
+- **A cost check.** *Example:* `audio: 32 voices + pre-mix SOFT = 920 cyc/frame (25%)`.
+
+**Constraints:**
+
+- Integer math only and no divides on the per-sample path.
+- Bounded time: no loop whose iteration count depends on the input without a cap.
+- When distortion is off, the shaper isn't called at all (no "NONE" branch per sample).
+
+**Deliverable:** a distortion unit, a per-patch flavor field, and the toggle.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. Per voice or post-mix? Weigh the cycle cost (×N), the sound (intermodulation), and what
+   "drive" means as the voice count changes.
+2. Where does distortion sit relative to the envelope and the filter? (Think of a guitar amp:
+   which of these is "before" the amp?)
+3. Soft clip wants `/3`. Why is a reciprocal multiply better here than a shift by a power of
+   two?
+4. Should distortion be a fixed property of a patch, or should the toggle let any patch use
+   any flavor?
+
+## Compare (spoiler)
+
+- `synth/distortion.h`: `DistortionType`, the `DISTORTION_STAGE_PRE_MIX`/`POST_MIX` choice
+  with its `#error` guard, `DISTORTION_DRIVE_GAIN` 6, `DISTORTION_FOLD_THRESHOLD` 12000 and
+  `DISTORTION_BITCRUSH_BITS` 8.
+- `synth/distortion.cpp`:
+  - `softClip()` uses `kCubicReciprocalQ16` = 21846 instead of `/ 3`. The comment explains
+    why a power-of-two divisor would break the curve's monotonicity.
+  - `foldback()` caps reflections at `kMaxFoldIterations` = 8 and then clamps.
+  - `bitcrush()` is a single mask.
+- `synth/audio_task.cpp`: distortion is applied per voice inside `#if
+  defined(DISTORTION_STAGE_PRE_MIX)` and only `if (distortionEnabled)`, so it's skipped
+  entirely when off.
+- `synth/voices.h`: `Patch::distortion`, the "matched distortion" per patch (e.g. METL1 hard
+  clip, METL2 foldback).
+- `synth/test/test_softclip.cpp`: the host test for the cubic's reciprocal.
+
+## Stretch
+
+- 2× oversampling just for the shaper (an upsample, shape, then half-band decimate) on a
+  single voice. Measure the cost and the reduction in aliasing.
+- An asymmetric "tube" curve for even harmonics.

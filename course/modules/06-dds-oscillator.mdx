@@ -1,0 +1,152 @@
+---
+id: 06-dds-oscillator
+title: "The DDS oscillator"
+weeks: 1
+prereqs: [02-digital-audio, 05-controls]
+milestones:
+  - id: m06-accuracy
+    text: "At five pot positions across the range, the tuner agrees with your printed frequency within ±1 cent."
+  - id: m06-notename
+    text: "Serial (or the OLED) shows the nearest note name and cents offset, e.g. 'A3 +3c', and it matches the tuner."
+  - id: m06-cost
+    text: "The measured oscillator cost is printed and ≤ 20 cycles per sample."
+  - id: m06-smooth
+    text: "Sweeping the pitch pot gives a smooth glide: no clicks when the frequency changes mid-waveform."
+  - id: m06-longrun
+    text: "After 10 minutes the pitch is still exactly right (no drift)."
+---
+
+## Goal
+
+Build an oscillator whose pitch is exact, whose cost is a handful of cycles, and whose
+frequency can change at any moment without a click.
+
+## You'll be able to
+
+- Explain direct digital synthesis: a phase accumulator, a phase increment and a lookup.
+- Choose accumulator width and table size from resolution and noise requirements.
+- Compute a phase increment from Hz and back.
+- Reason about truncation versus interpolation, and their costs.
+
+## Concepts
+
+- **Phase accumulator.** An N-bit unsigned integer that wraps for free. The top bits index the
+  table and the low bits carry the fraction.
+- **Tuning word.** `inc = f · 2^N / fs`. Resolution is `fs / 2^N`: about 10 µHz at N = 32.
+- **Why integers?** A float phase loses precision as it grows. Integer wraparound is exact and
+  costs nothing.
+- **Phase truncation.** Dropping the low bits causes small periodic errors (spurs). The table
+  size sets their level. Linear interpolation lowers them for a few cycles more.
+- **Changing frequency.** Change the increment, never the phase, and the waveform stays
+  continuous. That means no click.
+- **Note names.** MIDI note = `69 + 12·log2(f/440)`, then name and octave, plus a cents
+  offset.
+
+## Read
+
+**Core (≈4.5 h)**
+
+- Analog Devices, **MT-085 "Fundamentals of Direct Digital Synthesis"** (≈1 h). Then the
+  **"A Technical Tutorial on Digital Signal Synthesis"** (1999), sections on DDS fundamentals
+  and on spectral purity (≈1.5 h).
+- Puckette, *TTEM*, **2.1 The Wavetable Oscillator** and **2.5 Interpolation** (≈1 h).
+- Nigel Redmon, EarLevel, **"A wavetable oscillator—Introduction"** and **"—Part 1"**
+  (2012) (≈1 h).
+
+**Optional**
+
+- Redmon, EarLevel, **"Wavetable signal to noise ratio"** (2018): read it now or in module 07.
+
+## Explore (notebook)
+
+`06-dds.ipynb`:
+
+1. **Implement DDS in numpy** with a `uint32` accumulator. Generate 440 Hz for 10 s and measure
+   the frequency from zero crossings.
+2. **Float vs int.** Do the same with a `float32` phase that never wraps. Plot the frequency
+   error over time.
+3. **Spurs.** With a 256- and a 1,024-entry table, truncated and linearly interpolated, plot
+   the spectrum of a 1,234.5 Hz tone and read off the worst spur in dBc.
+4. **Resolution.** Compute the cents error of the *best possible* increment at 80 Hz and at
+   1 kHz for N = 16, 24 and 32.
+
+**Aha:** a 32-bit accumulator makes pitch error a non-issue, and the table size, not the
+accumulator, sets the noise.
+
+## Play (playground)
+
+**DDS wheel.**
+- A rotating phase pointer on a circle, the table drawn as a strip, and the current index
+  highlighted.
+- Sliders: frequency, accumulator bits (8 to 32) and table size, plus a truncate/interpolate
+  toggle.
+- Readouts: the tuning word, the actual frequency and the error in cents.
+- You should *hear* coarse pitch steps at 8 to 12 accumulator bits and spur noise with tiny
+  tables.
+
+**Reuses** the AudioWorklet oscillator (`SynthProcessor` in `web_sim/app.js`) and
+`freqToNoteName`. **New:** the wheel visual and the bit-width control.
+
+## Build
+
+Start from module 05 (pots, encoder and switch driving a crude sine).
+
+**Add:**
+
+- **An oscillator unit** with a set-frequency call (at block rate) and a next-sample call
+  (per sample). *Example API* (illustrative only):
+
+  ```cpp
+  class Oscillator {
+   public:
+    void setFrequency(float hz);  // block rate: float allowed here
+    int16_t next();               // per sample: integers only
+   private:
+    uint32_t phase_ = 0, inc_ = 0;
+  };
+  ```
+- **Exact tuning.** *Example:* 440 Hz at 44.1 kHz with a 32-bit accumulator gives
+  `inc = 440 · 2^32 / 44100 ≈ 42,852,281`.
+- **A note readout.** *Example:* `pitch 221.7 Hz  A3 +13c`.
+- **A cost measurement** using module 04's meter. *Example:* `osc: 9.8 cyc/sample`.
+
+**Constraints:**
+
+- The per-sample path is integer-only.
+- Frequency changes must never reset the phase.
+- The table is the one from module 03 (or a better one), built at boot.
+
+**Deliverable:** an oscillator unit plus a note-name helper, wired to the pitch pot.
+
+## Hardware milestone
+
+<Milestones />
+
+## Design questions
+
+1. Accumulator width: 32 bits is free on a 32-bit CPU. Is there any reason to go narrower or
+   wider?
+2. Table size versus interpolation: a lookup costs ~1 load, and interpolation adds a
+   multiply, a subtract and a second load. Given module 07 will multiply the number of
+   tables, which do you prefer?
+3. Where does the float → tuning-word conversion happen, and how often?
+4. Should a new frequency apply at the next sample, at the next block, or be ramped across a
+   block?
+
+## Compare (spoiler)
+
+- `synth/oscillator.h`: the `Oscillator` class, a 32-bit `phase_`/`phaseInc_` and
+  `PHASE_ACCUMULATOR_RANGE` (2^32).
+- `synth/oscillator.cpp`: `PHASE_INDEX_SHIFT` = 22 (the top 10 bits index the 1,024-entry
+  table, guarded by a `static_assert`). `getIndex()`, `setFrequency()` computes the increment
+  in `double` at block rate, and `nextSample()` is one lookup with no interpolation, plus the
+  null-table guard.
+- `synth/notes.h`: `freqToMidi`, `midiToFreq`, and `freqToNoteName` with its buffer-size
+  reasoning.
+- `audio_task.cpp`: `setFrequency()` is called once per block per voice, never per sample.
+
+## Stretch
+
+- Add linear interpolation behind a compile-time switch and measure both the spurs (from a
+  recording) and the cycle cost.
+- Phase-reset sync: an optional "hard sync" input that zeroes the phase, and listen to it.
