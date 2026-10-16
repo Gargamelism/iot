@@ -21,6 +21,7 @@ status=0
 extra_sources_for() {
   case "$1" in
     oscillator) echo "scale.cpp" ;;
+    noise) echo "tone.cpp envelope.cpp" ;;
   esac
 }
 

@@ -82,7 +82,9 @@ static void runTests() {
   // hold time (e.g. so a stuck switch doesn't sustain forever).
   {
     Envelope env;
-    env.configure({0, 0, 100, 50, 300}); // A0 D0 R50 S100% sustainLengthMs=300
+    EnvelopeConfig config = {0, 0, 100, 50}; // A0 D0 R50 S100%
+    config.sustainLengthMs = 300;           // not positional: the 5th field is shortNotesMs
+    env.configure(config);
 
     env.noteOn();
     CHECK(env.nextBlockGainQ15(kFramesPer100Ms) == VOLUME_Q15_ONE);  // 100ms
@@ -116,6 +118,18 @@ static void runTests() {
       CHECK(env.nextBlockGainQ15(kFramesPer100Ms) == VOLUME_Q15_ONE);
     }
     CHECK(!env.idle());
+  }
+
+  // GainRamp lands exactly on its target after `frames` steps, up and down.
+  {
+    const int16_t ends[][2] = {{0, VOLUME_Q15_ONE}, {VOLUME_Q15_ONE, 0}, {1000, 1001}, {20000, 123}};
+    for (const auto &e : ends) {
+      GainRamp ramp;
+      ramp.begin(e[0], e[1], AUDIO_BLOCK_FRAMES);
+      CHECK(ramp.next() == e[0]);
+      for (int i = 1; i < AUDIO_BLOCK_FRAMES; i++) ramp.next();
+      CHECK(ramp.next() == e[1]);
+    }
   }
 }
 

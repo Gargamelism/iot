@@ -191,7 +191,7 @@ so give the weight function the harmonic's real frequency:
 - `test_oscillator.cpp`'s all-spreads loop gains a frequency argument; `buildTable()` still
   normalises the weight sum, so headroom is unchanged and no RAM changes.
 
-## Phase 5 — breath, bow and pick noise
+## Phase 5 — breath, bow and pick noise ✅ implemented
 
 A flute tone is roughly a third noise; bowed strings and reeds carry a little; a pick has a
 20 ms burst. One noise generator on the mix path: 32-bit LCG (`x = x·1664525 + 1013904223`,
@@ -227,7 +227,7 @@ Freeverb-style: 4 combs (1116, 1188, 1277, 1356 samples at 44.1 kHz) + 2 all-pas
 ## Suggested order and what each buys
 
 0 ✅ (RAM trim + budget test) → 1 ✅ (note-on + ADSR) → 2 ✅ (brightness filter) → 3 ✅ (detune +
-vibrato) → 4 ✅ (Hz formants) → 5 (noise) → 6 (phases) → 7 (reverb). After 1 and 2 the guitar
+vibrato) → 4 ✅ (Hz formants) → 5 ✅ (noise) → 6 (phases) → 7 (reverb). After 1 and 2 the guitar
 and piano patches stop being organ stops; 3 makes the piano a piano and the winds sound
 played; 4–7 are polish.
 

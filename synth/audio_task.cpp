@@ -8,6 +8,7 @@
 #include "envelope.h"
 #include "tone.h"
 #include "vibrato.h"
+#include "noise.h"
 
 static I2SClass s_i2s;
 static Oscillator s_osc[MAX_VOICES];
@@ -26,14 +27,9 @@ static OnePoleLowpass s_toneFilter;
 // One LFO for the patch, scaling every voice's pitch (vibrato) and the amp
 // envelope's gain (tremolo); restarted at each note-on (see vibrato.h).
 static Vibrato s_vibrato;
-
-// Extra fractional bits carried by the per-sample gain ramp in audioTask():
-// a block-to-block Q15 gain change smaller than AUDIO_BLOCK_FRAMES would
-// round to a 0 per-sample step in plain integer division, flattening the
-// ramp instead of smoothing it. Widening the accumulator by this many bits
-// keeps that fractional step instead of truncating it away.
-static const int kGainRampFracBits = 16;
-static const int32_t kGainRampFracScale = 1 << kGainRampFracBits; // 65536
+// Chiff/pick/hammer/breath noise: LCG white noise, band-passed per patch and
+// shaped by its own envelope, triggered alongside s_ampEnvelope (see noise.h).
+static NoiseGenerator s_noise;
 
 // (Re)points every active voice's oscillator at patchIndex's wavetables and
 // rebuilds s_voiceLevelQ15 for its voice count. Called once at startup and
@@ -62,9 +58,11 @@ static void audioTask(void *arg) {
   bool distortionEnabled = false;
   uint8_t lastPatchIndex = 0;
   bool lastNoteHeld = false;
-  uint8_t lastNoteOnCount = 0;
+  uint8_t seenRetriggerSeq = 0;
   int16_t prevGainQ15 = 0;  // last block's envelope gain, for the per-sample ramp below
   int16_t targetGainQ15 = 0; // this block's envelope gain target
+  int16_t prevNoiseGainQ15 = 0;   // last block's noise gain (envelope x makeup x master)
+  int16_t targetNoiseGainQ15 = 0; // this block's
 
   for (int voiceIndex = 0; voiceIndex < MAX_VOICES; voiceIndex++) {
     freq[voiceIndex] = FREQ_MIN_HZ;
@@ -76,7 +74,7 @@ static void audioTask(void *arg) {
     // last block's values (inaudible at block granularity).
     if (xSemaphoreTake(g_paramsMutex, 0) == pdTRUE) {
       bool noteHeld = g_oscParams.noteHeld;
-      uint8_t noteOnCount = g_oscParams.noteOnCount;
+      uint8_t retriggerSeq = g_oscParams.retriggerSeq;
       float volume = g_oscParams.volume;
       uint8_t patchIndex = g_oscParams.patchIndex;
       distortionEnabled = g_oscParams.distortionEnabled;
@@ -103,6 +101,7 @@ static void audioTask(void *arg) {
         s_ampEnvelope.configure(kPatches[patchIndex].amp);
         s_filterEnvelope.configure(kPatches[patchIndex].tone.filter);
         s_vibrato.configure(kPatches[patchIndex].vibrato);
+        s_noise.configure(kPatches[patchIndex].noise);
       }
       voiceCount = liveVoiceCount;
 
@@ -113,17 +112,19 @@ static void audioTask(void *arg) {
       // does close), but only actually sounds — calls noteOn() — while
       // noteHeld is true: otherwise sweeping the pot would play notes with
       // the switch off.
-      if (noteOnCount != lastNoteOnCount) {
-        lastNoteOnCount = noteOnCount;
+      if (retriggerSeq != seenRetriggerSeq) {
+        seenRetriggerSeq = retriggerSeq;
         if (noteHeld) {
           s_ampEnvelope.noteOn();
           s_filterEnvelope.noteOn();
           s_vibrato.noteOn();
+          s_noise.noteOn();
         }
       }
       if (!noteHeld && lastNoteHeld) {
         s_ampEnvelope.noteOff();
         s_filterEnvelope.noteOff();
+        s_noise.noteOff();
       }
       lastNoteHeld = noteHeld;
       s_vibrato.advanceBlock(AUDIO_BLOCK_FRAMES);
@@ -138,6 +139,10 @@ static void audioTask(void *arg) {
       // the only float math left is off the per-sample hot path. Muting is
       // now the envelope's job (its release ramps to 0), not noteHeld.
       int16_t masterQ15 = (int16_t)(volume * VOLUME_Q15_ONE + 0.5f);
+      // Every block, every patch (see NoiseGenerator::nextBlockGainQ15): a
+      // switch to a patch without noise makes the target 0, and the ramp
+      // below fades the noise out.
+      targetNoiseGainQ15 = s_noise.nextBlockGainQ15(masterQ15, AUDIO_BLOCK_FRAMES);
       const float pitchMultiplier = s_vibrato.pitchMultiplier();
       for (int voiceIndex = 0; voiceIndex < voiceCount; voiceIndex++) {
         volQ15[voiceIndex] =
@@ -146,15 +151,14 @@ static void audioTask(void *arg) {
       }
     }
 
-    // Per-sample linear ramp from last block's envelope gain to this
-    // block's target, in a fixed-point accumulator with 16 extra bits of
-    // precision — one add and one shift per frame, no zipper noise at the
-    // block boundary (see envelope.h).
-    int32_t gainQ15Fixed = (int32_t)prevGainQ15 << kGainRampFracBits;
-    // Multiplication, not a shift: the difference can be negative (a
-    // release), and left-shifting a negative int is undefined behavior
-    // pre-C++20.
-    const int32_t gainStepFixed = ((int32_t)(targetGainQ15 - prevGainQ15) * kGainRampFracScale) / AUDIO_BLOCK_FRAMES;
+    // Per-sample linear ramps from last block's gains to this block's
+    // targets — no zipper noise at the block boundary (see envelope.h).
+    GainRamp ampRamp;
+    ampRamp.begin(prevGainQ15, targetGainQ15, AUDIO_BLOCK_FRAMES);
+    GainRamp noiseRamp;
+    noiseRamp.begin(prevNoiseGainQ15, targetNoiseGainQ15, AUDIO_BLOCK_FRAMES);
+    // Silent at both ends means silent throughout: skip the noise branch.
+    const bool noiseActive = prevNoiseGainQ15 != 0 || targetNoiseGainQ15 != 0;
 
     int16_t samples[MAX_VOICES];
     for (int frameIndex = 0; frameIndex < AUDIO_BLOCK_FRAMES; frameIndex++) {
@@ -176,15 +180,24 @@ static void audioTask(void *arg) {
         mixed = applyDistortion(mixed, distortion);
       }
 #endif
-      const int16_t gainQ15 = (int16_t)(gainQ15Fixed >> kGainRampFracBits);
-      mixed = (int16_t)(((int32_t)mixed * gainQ15) >> VOLUME_Q15_SHIFT);
-      gainQ15Fixed += gainStepFixed;
+      mixed = (int16_t)(((int32_t)mixed * ampRamp.next()) >> VOLUME_Q15_SHIFT);
       mixed = s_toneFilter.process(mixed);
+      // Added last, after the amp envelope and tone filter, so only the noise
+      // envelope shapes it (a chiff can lead the tone) and the clipper never
+      // chews it.
+      if (noiseActive) {
+        const int32_t band = s_noise.nextBandSample();
+        int32_t withNoise = mixed + ((band * noiseRamp.next()) >> VOLUME_Q15_SHIFT);
+        if (withNoise > INT16_MAX) withNoise = INT16_MAX;
+        if (withNoise < INT16_MIN) withNoise = INT16_MIN;
+        mixed = (int16_t)withNoise;
+      }
 
       buffer[frameIndex * 2 + 0] = mixed; // L
       buffer[frameIndex * 2 + 1] = mixed; // R
     }
     prevGainQ15 = targetGainQ15;
+    prevNoiseGainQ15 = targetNoiseGainQ15;
 
     // Blocking write paces the loop to real time; no delay() needed. If the
     // write comes up short (I2S not started, or a driver error) this
@@ -205,6 +218,7 @@ void audioTaskBegin() {
   s_ampEnvelope.configure(kPatches[0].amp);
   s_filterEnvelope.configure(kPatches[0].tone.filter);
   s_vibrato.configure(kPatches[0].vibrato);
+  s_noise.configure(kPatches[0].noise);
 
   // The audio task's stack also holds the per-voice frequency, level and
   // sample arrays, sized to MAX_VOICES since any patch can become active at
