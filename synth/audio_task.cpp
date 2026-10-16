@@ -62,7 +62,7 @@ static void audioTask(void *arg) {
   bool distortionEnabled = false;
   uint8_t lastPatchIndex = 0;
   bool lastNoteHeld = false;
-  uint8_t lastNoteOnCount = 0;
+  uint8_t lastRetriggerSeq = 0;
   int16_t prevGainQ15 = 0;  // last block's envelope gain, for the per-sample ramp below
   int16_t targetGainQ15 = 0; // this block's envelope gain target
 
@@ -76,7 +76,7 @@ static void audioTask(void *arg) {
     // last block's values (inaudible at block granularity).
     if (xSemaphoreTake(g_paramsMutex, 0) == pdTRUE) {
       bool noteHeld = g_oscParams.noteHeld;
-      uint8_t noteOnCount = g_oscParams.noteOnCount;
+      uint8_t retriggerSeq = g_oscParams.retriggerSeq;
       float volume = g_oscParams.volume;
       uint8_t patchIndex = g_oscParams.patchIndex;
       distortionEnabled = g_oscParams.distortionEnabled;
@@ -113,8 +113,8 @@ static void audioTask(void *arg) {
       // does close), but only actually sounds — calls noteOn() — while
       // noteHeld is true: otherwise sweeping the pot would play notes with
       // the switch off.
-      if (noteOnCount != lastNoteOnCount) {
-        lastNoteOnCount = noteOnCount;
+      if (retriggerSeq != lastRetriggerSeq) {
+        lastRetriggerSeq = retriggerSeq;
         if (noteHeld) {
           s_ampEnvelope.noteOn();
           s_filterEnvelope.noteOn();

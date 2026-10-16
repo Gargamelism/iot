@@ -93,7 +93,7 @@ as `OscParams::audioOn`, which today hard-mutes the mix. Reinterpret it as the g
 edge = note on, falling edge = release. A second trigger source, per patch: re-trigger when the
 pitch pot's snapped root degree changes (`snapMidiToScaleDegree`, `scale.cpp`, already produces
 it), so sweeping the pot "re-plucks" each new note for guitar/piano. Publish a `uint8_t
-noteOnCount` (increment per trigger) plus `bool gate` in `OscParams` — a counter, not an edge
+retriggerSeq` (increment per trigger) plus `bool gate` in `OscParams` — a counter, not an edge
 flag, so a press shorter than one 5.8 ms block is never lost; the audio task compares it to
 the last count it saw.
 

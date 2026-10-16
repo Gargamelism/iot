@@ -18,7 +18,7 @@ struct OscParams {
   bool noteHeld;            // PIN_AUDIO_SWITCH state — true while held closed;
                             // the amplitude envelope's note-on/note-off gate
                             // (envelope.h), not a hard mute
-  uint8_t noteOnCount;      // increments on every note-on CANDIDATE (noteHeld
+  uint8_t retriggerSeq;      // increments on every note-on CANDIDATE (noteHeld
                             // going true, or a new diatonic root — the
                             // latter even while noteHeld is false, so a pot
                             // sweep is captured but audioTask() only calls
