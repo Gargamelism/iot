@@ -12,7 +12,7 @@ The learner already knows C++ and general programming well. They know a moderate
 Choices the user made:
 - **Capabilities, not a copy.** By the end the learner's synth matches what this one can do (same hardware). It covers DDS wavetable voices, band-limiting, polyphony, scales, patches selected with the encoder, ADSR, a tone filter, vibrato, distortion and instrument models. Build tasks state requirements and budgets, not designs. The repo is shown only after each milestone, as "one possible answer".
 - **How each module is checked:** a hardware milestone checklist, a browser playground spec and a Python notebook spec. There are no required unit tests.
-- **Where it lives:** a `course/` folder in this repo, written as Markdown/MDX that the Next.js site (plan 2) renders straight from disk.
+- **Where it lives:** a `synth_course/` folder in this repo, written as Markdown/MDX that the Next.js site (plan 2) renders straight from disk.
   - Each module file starts with YAML front-matter: `id`, `title`, `weeks`, `prereqs`, and `milestones` (a list of stable checklist-item ids).
   - The site's SQLite stores progress, notes and saved playground presets against those ids. It never stores the content itself, so editing the curriculum doesn't lose saved state.
 - **Pace:** 5–8 h/week, with deep reading. That is about 16 weeks.
@@ -20,7 +20,7 @@ Choices the user made:
 ## Deliverables
 
 ```
-course/
+synth_course/
   curriculum.md          audience, outcome, kit list, how to use, module map, pacing, bibliography
   modules/NN-slug.mdx    one per module (17), front-matter + fixed section template below
 ```
@@ -76,7 +76,7 @@ Everything else is free.
    - Check that it exists, the current edition, and the exact chapter/section numbers and titles.
    - Check the URL is live, and the price and availability for paid books.
    - Fix the draft table above wherever reality differs. Chapter numbers in the table are from memory and must not be published unverified.
-2. **Write `course/curriculum.md`:**
+2. **Write `synth_course/curriculum.md`:**
    - audience and prerequisites
    - the end-state capabilities checklist, derived from current `voices.h` / `audio_task.cpp` features
    - kit list from `pins.h` and `CLAUDE.md`: board, PCM5100/5102 DAC, MAX98357A, 2 pots, encoder, gate switch
@@ -93,7 +93,7 @@ Everything else is free.
 
 ## Verification
 
-- A link check on every URL in `course/`: a script in the scratchpad runs `curl -sIL` and must report no 4xx or 5xx.
+- A link check on every URL in `synth_course/`: a script in the scratchpad runs `curl -sIL` and must report no 4xx or 5xx.
 - `grep` confirms every module file has all template headings, in order.
 - Every repo symbol named under Compare exists. Grep each one; it must have no stale names (e.g. `kVoices` → it is now `kPatches`).
 - Manual dependency read-through: no forward references between modules.

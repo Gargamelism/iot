@@ -1,0 +1,56 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --bg: #fbfaf7;
+  --fg: #1d1d1b;
+  --muted: #6b6a66;
+  --line: #e2dfd8;
+  --subtle: #f2efe8;
+  --accent: #2f6f4f;
+  --warn: #a15c07;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141513;
+    --fg: #e8e6e1;
+    --muted: #9b9890;
+    --line: #2e302c;
+    --subtle: #1d1f1c;
+    --accent: #6cc79a;
+    --warn: #e0a24a;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-warn: var(--warn);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* rehype-pretty-code emits both themes; show the one matching the scheme */
+.prose pre {
+  background: var(--subtle);
+  border: 1px solid var(--line);
+}
+code[data-theme*=" "],
+code[data-theme*=" "] span {
+  color: var(--shiki-light);
+}
+@media (prefers-color-scheme: dark) {
+  code[data-theme*=" "],
+  code[data-theme*=" "] span {
+    color: var(--shiki-dark);
+  }
+}

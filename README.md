@@ -37,3 +37,9 @@ See the pin definitions and constants in `synth/pins.h`.
 ## Speaker/amp test
 
 `player/` is a separate, standalone sketch that loops a short audio clip of your own choosing over I2S, with the master volume pot controlling level live — useful for checking the physical speaker's max clean volume and response with real material. See `player/player.ino`'s top comment for the WAV-conversion + `wav_to_header.py` steps.
+
+## Course site
+
+`synth_course/` holds a self-teaching curriculum for building this synth yourself, and
+`synth_course/site/` is a local website that renders it and saves your progress. It runs in Docker: `colima start`,
+then `cd synth_course/site && make dev` and open http://localhost:3100. See `synth_course/site/README.md`.
