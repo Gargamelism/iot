@@ -71,34 +71,3 @@ private:
   float noteElapsedMs_ = 0.0f; // time since noteOn() — used to detect short notes
   bool shortNote_ = false;      // latched at noteOff(): held < shortNotesMs
 };
-
-// Per-sample linear ramp between two block-rate Q15 gains (last block's
-// envelope target -> this block's), so the block granularity never zippers.
-// A fixed-point accumulator with kFracBits extra bits: a gain change smaller
-// than `frames` would otherwise round to a 0 per-sample step in plain integer
-// division, flattening the ramp instead of smoothing it. One add and one
-// shift per sample.
-class GainRamp {
-public:
-  void begin(int16_t from, int16_t to, int frames) {
-    fixed_ = (int32_t)from << kFracBits;
-    // Multiplication, not a shift: the difference can be negative (a
-    // release), and left-shifting a negative int is undefined behavior
-    // pre-C++20.
-    step_ = ((int32_t)(to - from) * kFracScale) / frames;
-  }
-
-  // The gain for this sample; advances one step.
-  int16_t next() {
-    const int16_t gain = (int16_t)(fixed_ >> kFracBits);
-    fixed_ += step_;
-    return gain;
-  }
-
-private:
-  static const int kFracBits = 16;
-  static const int32_t kFracScale = 1 << kFracBits; // 65536
-
-  int32_t fixed_ = 0;
-  int32_t step_ = 0;
-};
