@@ -47,24 +47,27 @@ and learn exactly which pins you have to work with.
 
 **Core (≈3.5 h)**
 
-- Arduino, **arduino-cli "Getting started"** (arduino.github.io/arduino-cli): installing
+- Arduino, **[arduino-cli "Getting started"](https://arduino.github.io/arduino-cli/latest/getting-started/)**: installing
   cores and libraries, compiling and uploading (≈0.5 h).
-- Espressif, **Arduino-ESP32 "Getting Started"** and the **GPIO** API page
-  (docs.espressif.com/projects/arduino-esp32) (≈1 h).
-- Espressif, **ESP32-C3 Series Datasheet**: the *Pins* chapter (pin overview and the strapping
+- Espressif, **[Arduino-ESP32 "Getting Started"](https://docs.espressif.com/projects/arduino-esp32/en/latest/getting_started.html)** and the
+  **[GPIO](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/gpio.html)** API page (≈1 h).
+- Espressif, **[ESP32-C3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf)**: the *Pins* chapter (pin overview and the strapping
   pins section) and the ADC rows of the peripheral pin table (≈1 h).
-- Adafruit, **"Adafruit GFX Graphics Library"** guide: coordinates, text and drawing
+- Adafruit, **["Adafruit GFX Graphics Library"](https://learn.adafruit.com/adafruit-gfx-graphics-library)** guide: coordinates, text and drawing
   primitives (≈1 h).
 
 **Optional**
 
-- Espressif, **ESP32-C3 Technical Reference Manual**: the *IO MUX and GPIO Matrix* chapter,
+- Espressif, **[ESP32-C3 Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf)**: the *IO MUX and GPIO Matrix* chapter,
   for how any peripheral signal can be routed to (almost) any pin.
 
 ## Explore (notebook)
 
-No notebook this module. Set up the Python environment (`numpy`, `scipy`, `matplotlib`,
-`sounddevice`, `jupyter`) and check it runs. Module 01 starts using it.
+`00-toolchain-and-board.ipynb` is just a setup check. There's nothing to install: Python,
+numpy, scipy, matplotlib and JupyterLab run inside the course site's Docker container
+(`make dev`). Open the notebook from this page and run it. It prints the library versions,
+plays a test tone in the browser, and checks the shared helpers (`synthlib.py`) work.
+Module 01 starts using them for real.
 
 ## Play (playground)
 

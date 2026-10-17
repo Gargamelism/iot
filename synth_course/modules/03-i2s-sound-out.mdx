@@ -48,24 +48,24 @@ DAC and the speaker amp.
 
 **Core (≈4 h)**
 
-- Philips, **I²S bus specification** (1986, rev. 1996): the whole 7-page spec, timing
+- Philips, **[I²S bus specification](https://www.sparkfun.com/datasheets/BreakoutBoards/I2SBUS.pdf)** (1986, rev. 1996): the whole 7-page spec, timing
   diagrams included (≈0.5 h).
-- Texas Instruments, **PCM5102A datasheet**: pin functions, the "Audio Data Interface"
+- Texas Instruments, **[PCM5102A datasheet](https://www.ti.com/lit/ds/symlink/pcm5102a.pdf)**: pin functions, the "Audio Data Interface"
   timing, the "Hardware Control" table (FLT/DEMP/FMT/XSMT) and "PLL" (system clock absent)
   sections (≈1 h).
-- Adafruit, **"Adafruit MAX98357 I2S Class-D Mono Amp"** guide, plus the MAX98357A
-  datasheet's channel-select and gain tables (≈0.5 h).
-- Espressif, **ESP-IDF Programming Guide (ESP32-C3) → Peripherals → I2S**: standard mode,
+- Adafruit, **["Adafruit MAX98357 I2S Class-D Mono Amp"](https://learn.adafruit.com/adafruit-max98357-i2s-class-d-mono-amp)** guide, plus the
+  [MAX98357A datasheet](https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf)'s channel-select and gain tables (≈0.5 h).
+- Espressif, **[ESP-IDF Programming Guide (ESP32-C3) → Peripherals → I2S](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/api-reference/peripherals/i2s.html)**: standard mode,
   DMA buffers and the data bit width/slot sections (≈1.5 h).
-- Espressif, **Arduino-ESP32 I2S API** page (`ESP_I2S.h`, `I2SClass`) (≈0.5 h).
+- Espressif, **[Arduino-ESP32 I2S API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/i2s.html)** page (`ESP_I2S.h`, `I2SClass`) (≈0.5 h).
 
 **Optional**
 
-- Puckette, *TTEM*, **2.1 The Wavetable Oscillator**: preview of module 06.
+- Puckette, *TTEM*, **[2.1 The Wavetable Oscillator](https://msp.ucsd.edu/techniques/latest/book-html/node27.html)**: preview of module 06.
 
 ## Explore (notebook)
 
-`03-i2s.ipynb`:
+`03-i2s-sound-out.ipynb`:
 
 1. **Clock arithmetic.** For 44.1 and 48 kHz at 16, 24 and 32-bit slots, compute BCK, the
    bytes per second and the bytes per 256-frame block.

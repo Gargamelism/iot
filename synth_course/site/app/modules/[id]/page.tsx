@@ -2,11 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { io } from "next/cache";
-import { designQuestionCount, getAllModules, getModule, sectionBody } from "@/lib/content";
+import { designQuestionCount, getAllModules, getModule, JUPYTER_URL, notebooksFor, sectionBody } from "@/lib/content";
 import { store } from "@/lib/db";
 import { renderMdx, wrapSpoiler } from "@/lib/mdx";
 import { MilestoneChecklist } from "@/components/MilestoneChecklist";
 import { NotesPanel } from "@/components/NotesPanel";
+import { NotebookPanel } from "@/components/NotebookPanel";
 import { Spoiler } from "@/components/Spoiler";
 import { PLAYGROUNDS } from "@/playgrounds/meta";
 
@@ -39,13 +40,20 @@ async function ModulePageContent({ params }: { params: Promise<{ id: string }> }
   // "**Core (≈4.5 h)**" in the Read section
   const readHours = Number(sectionBody(body, "Read").match(/Core \(≈\s*([\d.]+)\s*h/)?.[1] ?? 0);
   const playgrounds = PLAYGROUNDS.filter((p) => p.module === id);
+  const notebooks = await notebooksFor(id);
+  const notebookUrl = `${JUPYTER_URL}/lab/tree/${id}.ipynb`;
+  const solutionUrl = notebooks.solution ? `${JUPYTER_URL}/lab/tree/solutions/${id}.ipynb` : undefined;
   const index = all.findIndex((m) => m.meta.id === id);
   const prev = all[index - 1]?.meta;
   const next = all[index + 1]?.meta;
 
   const content = await renderMdx(wrapSpoiler(body), {
     Milestones: () => <MilestoneChecklist moduleId={id} milestones={meta.milestones} checked={checked} />,
-    Spoiler: ({ children }) => <Spoiler done={done}>{children}</Spoiler>,
+    Spoiler: ({ children }) => (
+      <Spoiler done={done} solutionUrl={solutionUrl}>
+        {children}
+      </Spoiler>
+    ),
   });
 
   return (
@@ -56,6 +64,7 @@ async function ModulePageContent({ params }: { params: Promise<{ id: string }> }
         </p>
         <h1>{meta.title}</h1>
         {content}
+        {notebooks.exercise && <NotebookPanel src={notebookUrl} />}
         <nav className="not-prose mt-12 flex justify-between border-t border-line pt-4 text-sm">
           {prev ? <Link href={`/modules/${prev.id}`}>← {prev.title}</Link> : <span />}
           {next ? <Link href={`/modules/${next.id}`}>{next.title} →</Link> : <span />}
@@ -103,7 +112,13 @@ async function ModulePageContent({ params }: { params: Promise<{ id: string }> }
             ))}
             {playgrounds.length === 0 && <li>Playground: not built yet</li>}
             <li>
-              Notebook: <code>notebooks/{id}.ipynb</code>
+              {notebooks.exercise ? (
+                <a href="#notebook" className="text-fg hover:underline">
+                  ▶ Notebook
+                </a>
+              ) : (
+                "Notebook: not built yet"
+              )}
             </li>
           </ul>
         </section>

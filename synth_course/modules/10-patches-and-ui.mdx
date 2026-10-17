@@ -48,18 +48,18 @@ the compiler, selected by the encoder and shown on the OLED.
 
 **Core (≈3.5 h)**
 
-- cppreference, **`constexpr` specifier** and **`static_assert` declaration** (C++17 rules
+- cppreference, **[`constexpr` specifier](https://en.cppreference.com/w/cpp/language/constexpr)** and **[`static_assert` declaration](https://en.cppreference.com/w/cpp/language/static_assert)** (C++17 rules
   for constexpr functions and loops) (≈1 h).
-- Adafruit, **"Adafruit GFX Graphics Library"**: the text, `getTextBounds` and
+- Adafruit, **["Adafruit GFX Graphics Library"](https://learn.adafruit.com/adafruit-gfx-graphics-library)**: the text, `getTextBounds` and
   `fillRect` sections, revisited (≈0.5 h).
-- Adafruit_SSD1306 library examples (`ssd1306_128x64_i2c`) skimmed for `display()` and
+- [Adafruit_SSD1306 library examples](https://github.com/adafruit/Adafruit_SSD1306/tree/master/examples) (`ssd1306_128x64_i2c`) skimmed for `display()` and
   buffer semantics (≈0.5 h).
-- *Mastering the FreeRTOS Real Time Kernel*, **ch 8 Resource Management**, revisit the
+- *[Mastering the FreeRTOS Real Time Kernel](https://github.com/FreeRTOS/FreeRTOS-Kernel-Book)*, **ch 8 Resource Management**, revisit the
   mutex and "gatekeeper task" ideas with patch switching in mind (≈1.5 h).
 
 ## Explore (notebook)
 
-`10-patches.ipynb` (short):
+`10-patches-and-ui.ipynb` (short):
 
 1. Write your patch table as a Python list of dicts. Compute the union of spectra, the highest
    frequency each must reach (pot max + largest offset + vibrato margin), the mip levels per

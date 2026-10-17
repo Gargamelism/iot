@@ -114,3 +114,18 @@ export function validateModule(mod: CourseModule, fileName: string, allIds: Set<
   if (!body.includes("<Milestones />")) errors.push("missing <Milestones /> tag");
   return errors;
 }
+
+// Which notebooks exist for a module: notebooks/<id>.ipynb (the exercise) and
+// notebooks/solutions/<id>.ipynb (behind the spoiler).
+export async function notebooksFor(id: string): Promise<{ exercise: boolean; solution: boolean }> {
+  const exists = (p: string) =>
+    fs.access(path.join(COURSE_DIR, "notebooks", p)).then(
+      () => true,
+      () => false,
+    );
+  const [exercise, solution] = await Promise.all([exists(`${id}.ipynb`), exists(`solutions/${id}.ipynb`)]);
+  return { exercise, solution };
+}
+
+// Where JupyterLab is reachable from the browser (the Makefile publishes it).
+export const JUPYTER_URL = process.env.NEXT_PUBLIC_JUPYTER_URL ?? "http://localhost:8888";

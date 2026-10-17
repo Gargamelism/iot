@@ -52,22 +52,23 @@ everything else, and know your exact CPU budget.
 
 **Core (≈6 h)**
 
-- *Mastering the FreeRTOS Real Time Kernel*, **ch 4 Task Management** (≈2 h) and **ch 8
+- *[Mastering the FreeRTOS Real Time Kernel](https://github.com/FreeRTOS/FreeRTOS-Kernel-Book)*, **ch 4 Task Management** (≈2 h) and **ch 8
   Resource Management**: mutexes, priority inversion, critical sections (≈1.5 h).
-- Ross Bencina, **"Real-time audio programming 101: time waits for nothing"** (≈0.5 h).
-- Espressif, **ESP-IDF (ESP32-C3) → FreeRTOS (IDF)** overview and **Watchdogs** (task
+- Ross Bencina, **["Real-time audio programming 101: time waits for nothing"](http://www.rossbencina.com/code/real-time-audio-programming-101-time-waits-for-nothing)** (≈0.5 h).
+- Espressif, **[ESP-IDF (ESP32-C3) → FreeRTOS (IDF)](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/api-reference/system/freertos_idf.html)** overview and
+  **[Watchdogs](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/api-reference/system/wdts.html)** (task
   watchdog section) (≈1 h).
-- Puckette, *TTEM*, **ch 3 Audio and control computations**: 3.1–3.3 (sampling theorem,
+- Puckette, *TTEM*, **[ch 3 Audio and control computations](https://msp.ucsd.edu/techniques/latest/book-html/node40.html)**: 3.1–3.3 (sampling theorem,
   control, control streams) (≈1 h).
 
 **Optional**
 
-- *Mastering the FreeRTOS Real Time Kernel*, **ch 10 Task Notifications**: a lighter
+- *[Mastering the FreeRTOS Real Time Kernel](https://github.com/FreeRTOS/FreeRTOS-Kernel-Book)*, **ch 10 Task Notifications**: a lighter
   alternative to the mutex.
 
 ## Explore (notebook)
 
-`04-budget.ipynb`:
+`04-real-time-one-core.ipynb`:
 
 1. **A budget calculator.** Given clock, sample rate and block size, compute cycles per frame,
    block duration (ms) and the share of per-block overhead (assume a fixed cost per I2S write).

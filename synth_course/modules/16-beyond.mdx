@@ -43,23 +43,24 @@ Pick the readings for your project.
 
 - **Random phases:** `plans/2026-09-11_realistic_instrument_dynamics.md`, *Phase 6*;
   revisit the module 01 phase experiment.
-- **Reverb:** J. O. Smith III, *Physical Audio Signal Processing*, **"Artificial
-  Reverberation"**, then the **"Schroeder Reverberators"** and **"Freeverb"** pages
+- **Reverb:** J. O. Smith III, *Physical Audio Signal Processing*, **["Artificial Reverberation"](https://ccrma.stanford.edu/~jos/pasp/Artificial_Reverberation.html)**,
+  then the **["Schroeder Reverberators"](https://ccrma.stanford.edu/~jos/pasp/Schroeder_Reverberators.html)** and **["Freeverb"](https://ccrma.stanford.edu/~jos/pasp/Freeverb.html)** pages
   (≈3 h).
 - **Karplus-Strong:**
   - K. Karplus & A. Strong, "Digital Synthesis of Plucked-String and Drum Timbres",
-    *Computer Music Journal* 7(2):43–55, 1983 (≈1.5 h)
-  - J. O. Smith III, *PASP*, **"The Karplus-Strong Algorithm"** (≈1 h)
-  - Pirkle, *Designing Software Synthesizer Plugins in C++* 2e, **ch 13 Karplus-Strong
+    *Computer Music Journal* 7(2):43–55, 1983, via libraries or JSTOR; Karplus's own
+    [notes on the algorithm](https://users.soe.ucsc.edu/~karplus/digitar.html) are free (≈1.5 h)
+  - J. O. Smith III, *PASP*, **["The Karplus-Strong Algorithm"](https://ccrma.stanford.edu/~jos/pasp/Karplus_Strong_Algorithm.html)** (≈1 h)
+  - Pirkle, *[Designing Software Synthesizer Plugins in C++](https://www.routledge.com/Designing-Software-Synthesizer-Plugins-in-C-With-Audio-DSP/Pirkle/p/book/9780367510466)* 2e, **ch 13 Karplus-Strong
     Plucked String Model** (≈2 h)
 - **Per-voice envelopes:** Pirkle **ch 3 Synth Voices, Synth Modules, and Module Cores**
   (≈1.5 h).
-- **MIDI over serial:** the *hairless-midiserial* bridge (projectgus.github.io), plus the
+- **MIDI over serial:** the [*hairless-midiserial*](https://projectgus.github.io/hairless-midiserial/) bridge, plus the
   MIDI 1.0 message format (note on/off, CC) from any MIDI primer (≈1 h).
 
 ## Explore (notebook)
 
-Write `16-capstone.ipynb` yourself. Start with a float prototype of your feature in numpy,
+Write `16-beyond.ipynb` yourself. Start with a float prototype of your feature in numpy,
 render audio, and only then port it. *Examples:*
 - **Reverb:** the impulse response and decay (RT60) of your comb/all-pass network.
 - **Karplus-Strong:** the decay time against pitch, and the effect of the loop filter.

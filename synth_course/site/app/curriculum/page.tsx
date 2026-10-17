@@ -20,7 +20,12 @@ async function CurriculumPageContent() {
       // curriculum.md links to modules/NN-x.mdx (relative, for reading on disk)
       a: ({ href = "", children }) => {
         const m = href.match(/^modules\/([\w-]+)\.mdx$/);
-        return m ? <Link href={`/modules/${m[1]}`}>{children}</Link> : <a href={href}>{children}</a>;
+        if (m) return <Link href={`/modules/${m[1]}`}>{children}</Link>;
+        return (
+          <a href={href} target="_blank" rel="noreferrer">
+            {children}
+          </a>
+        );
       },
     },
     "md",

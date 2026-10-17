@@ -65,22 +65,23 @@ safely to the audio task.
 **Core (≈4.5 h)**
 
 - Espressif, *ESP-IDF Programming Guide*, ESP32-C3 → API Reference → Peripherals →
-  **ADC Oneshot Mode Driver** and **ADC Calibration Driver**: the attenuation table and the
+  **[ADC Oneshot Mode Driver](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/api-reference/peripherals/adc_oneshot.html)** and
+  **[ADC Calibration Driver](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/api-reference/peripherals/adc_calibration.html)**: the attenuation table and the
   "minimizing noise" notes (≈1 h).
-- Jack Ganssle, **A Guide to Debouncing**, whole paper; skim the hardware-filter parts
+- Jack Ganssle, **[A Guide to Debouncing](https://www.ganssle.com/debouncing.pdf)**, whole paper; skim the hardware-filter parts
   (≈1 h).
-- Ben Buxton, **Rotary encoder handler** README and `Rotary.cpp`: the full-step vs half-step
+- Ben Buxton, **[Rotary encoder handler](https://github.com/buxtronix/arduino/tree/master/libraries/Rotary)** README and `Rotary.cpp`: the full-step vs half-step
   tables (≈0.5 h).
-- *Mastering the FreeRTOS Real Time Kernel*, **ch 7 Interrupt Management**: deferred
+- *[Mastering the FreeRTOS Real Time Kernel](https://github.com/FreeRTOS/FreeRTOS-Kernel-Book)*, **ch 7 Interrupt Management**: deferred
   interrupt processing and the "critical sections" material (≈1.5 h).
-- Nigel Redmon, EarLevel, **"A one-pole filter"** (2012). The EMA *is* this filter. You'll
+- Nigel Redmon, EarLevel, **["A one-pole filter"](https://www.earlevel.com/main/2012/12/15/a-one-pole-filter/)** (2012). The EMA *is* this filter. You'll
   return to it in module 12 (≈0.5 h).
 
 **Optional**
 
-- Loy, *Musimathics* Vol. 1, **ch 6 Psychophysical Basis of Sound**: the sections on
+- Loy, *[Musimathics](https://mitpressbookstore.mit.edu/book/9780262516556)* Vol. 1, **ch 6 Psychophysical Basis of Sound**: the sections on
   loudness and pitch perception, to justify your mappings.
-- Arduino-ESP32 docs, **GPIO** and **Interrupts** pages (`attachInterrupt`, `IRAM_ATTR`).
+- Arduino-ESP32 docs, **[GPIO](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/gpio.html)** page (its interrupt section) (`attachInterrupt`, `IRAM_ATTR`).
 
 ## Explore (notebook)
 

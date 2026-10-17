@@ -6,6 +6,18 @@ import * as runtime from "react/jsx-runtime";
 import remarkGfm from "remark-gfm";
 import rehypePrettyCode from "rehype-pretty-code";
 
+// External links open in a new tab so the course page stays where you were.
+const ExternalAwareLink: MDXComponents["a"] = ({ href = "", children, ...rest }) =>
+  /^https?:\/\//.test(href) ? (
+    <a href={href} target="_blank" rel="noreferrer" {...rest}>
+      {children}
+    </a>
+  ) : (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  );
+
 export async function renderMdx(source: string, components: MDXComponents, format: "md" | "mdx" = "mdx") {
   const { default: Content } = await evaluate(source, {
     ...runtime,
@@ -13,7 +25,7 @@ export async function renderMdx(source: string, components: MDXComponents, forma
     remarkPlugins: [remarkGfm],
     rehypePlugins: [[rehypePrettyCode, { theme: { light: "github-light", dark: "github-dark" }, keepBackground: false }]],
   });
-  return <Content components={components} />;
+  return <Content components={{ a: ExternalAwareLink, ...components }} />;
 }
 
 // Wraps the "Compare (spoiler)" section in <Spoiler> so the content files stay

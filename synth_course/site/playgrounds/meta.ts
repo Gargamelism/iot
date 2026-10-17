@@ -9,6 +9,13 @@ export interface PlaygroundMeta {
 
 export const PLAYGROUNDS: PlaygroundMeta[] = [
   {
+    id: "harmonic-lab",
+    title: "Harmonic lab",
+    module: "07-band-limited-wavetables",
+    description:
+      "Draw a spectrum with 32 harmonic sliders and hear it through an integer wavetable oscillator. Switch band-limiting off, per octave (mip-map) or exact per note, and sweep the pitch to hear aliasing and the mip boundaries.",
+  },
+  {
     id: "web-sim",
     title: "Firmware simulator (original 3-osc)",
     description:

@@ -1,0 +1,4 @@
+# The site image is built with synth_course/ as context (see site/Makefile) only
+# so it can copy the notebooks' requirements; nothing else is needed.
+*
+!notebooks/requirements.txt

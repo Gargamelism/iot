@@ -60,26 +60,28 @@ range while costing about one table lookup per sample.
 
 **Core (≈9 h, spread over 1.5 weeks)**
 
-- Downey, *Think DSP*, **ch 2 Harmonics**: the spectra of triangle/square/saw and the
+- Downey, *Think DSP*, **[ch 2 Harmonics](https://greenteapress.com/thinkdsp/html/thinkdsp003.html)**: the spectra of triangle/square/saw and the
   section on aliasing, with its Python (≈2 h).
-- Nigel Redmon, EarLevel, **"A wavetable oscillator"**: Parts 1–3, then "the code" and
-  "end notes" (2012). This is the closest published design to what you're building (≈2 h).
-- Pirkle, *Designing Software Synthesizer Plugins in C++* 2e, **ch 9 Wavetable
+- Nigel Redmon, EarLevel, **"A wavetable oscillator"**: Parts [1](https://www.earlevel.com/main/2012/05/04/a-wavetable-oscillator%E2%80%94part-1/),
+  [2](https://www.earlevel.com/main/2012/05/08/a-wavetable-oscillator-part-2/) and [3](https://www.earlevel.com/main/2012/05/09/a-wavetable-oscillator-part-3/), then
+  ["the code"](https://www.earlevel.com/main/2012/05/25/a-wavetable-oscillator-the-code/) and ["end notes"](https://www.earlevel.com/main/2012/11/18/a-wavetable-oscillator-end-notes/) (2012). This is the closest published design to what you're building (≈2 h).
+- Pirkle, *[Designing Software Synthesizer Plugins in C++](https://www.routledge.com/Designing-Software-Synthesizer-Plugins-in-C-With-Audio-DSP/Pirkle/p/book/9780367510466)* 2e, **ch 9 Wavetable
   Oscillators** (≈3 h).
-- Puckette, *Theory and Technique of Electronic Music*, **ch 10 Classical waveforms**: the
-  sections on symmetries and Fourier series and on controlling foldover (≈1.5 h).
-- Gordon Reid, *Synth Secrets* **part 14: "An Introduction To Additive Synthesis"** (≈0.5 h).
+- Puckette, *Theory and Technique of Electronic Music*, **[ch 10 Classical waveforms](https://msp.ucsd.edu/techniques/latest/book-html/node184.html)**: the
+  sections on [symmetries and Fourier series](https://msp.ucsd.edu/techniques/latest/book-html/node185.html) and on
+  [controlling foldover](https://msp.ucsd.edu/techniques/latest/book-html/node193.html) (≈1.5 h).
+- Gordon Reid, *Synth Secrets* **[part 14: "An Introduction To Additive Synthesis"](https://www.soundonsound.com/techniques/introduction-additive-synthesis)** (≈0.5 h).
 
 **Optional**
 
-- Redmon, EarLevel, **"Wavetable signal to noise ratio"** (2018): table length versus
+- Redmon, EarLevel, **["Wavetable signal to noise ratio"](https://www.earlevel.com/main/2018/09/22/wavetable-signal-to-noise-ratio/)** (2018): table length versus
   quality, with numbers.
-- Redmon, EarLevel, **"Further thoughts on wave table oscillators"** (2020).
-- Puckette, **ch 2 Wavetables and samplers**: the interpolation sections.
+- Redmon, EarLevel, **["Further thoughts on wave table oscillators"](https://www.earlevel.com/main/2020/01/04/further-thoughts-on-wave-table-oscillators/)** (2020).
+- Puckette, **[ch 2 Wavetables and samplers](https://msp.ucsd.edu/techniques/latest/book-html/node26.html)**: the interpolation sections.
 
 ## Explore (notebook)
 
-`07-wavetables.ipynb`:
+`07-band-limited-wavetables.ipynb`:
 
 1. **Build** one period of saw, square and triangle from their harmonic weights (sum of
    sines) and plot them over the "ideal" shapes. Find the Gibbs overshoot.
