@@ -68,7 +68,8 @@ export function WebSim({ state, setState }: PlaygroundProps<WebSimState>) {
       const s = stateRef.current;
       for (let i = 0; i < NUM_OSCILLATORS; i++) {
         const volFiltered = smoothValue(s.vol[i] + adcNoise(), sm.vol[i], ADC_HYSTERESIS_COUNTS, ADC_EMA_ALPHA);
-        volume.current[i] = clamp01(volFiltered / ADC_MAX_COUNT);
+        // controls.cpp dead zone: true silence at the bottom of the travel.
+        volume.current[i] = volFiltered < ADC_HYSTERESIS_COUNTS ? 0 : clamp01(volFiltered / ADC_MAX_COUNT);
         if (i < NUM_PITCH_POTS) {
           const pitchFiltered = smoothValue(
             s.pitch[i] + adcNoise(),

@@ -2,37 +2,33 @@
 
 #include <stdint.h>
 
-// Pin map for the ABRobot ESP32-C3 0.42" OLED dev board (ESP32-C3, QFN32).
-// This is NOT a bare SuperMini: it has a built-in SSD1306 OLED hardwired to
-// GPIO5 (SDA) / GPIO6 (SCL), GPIO18/19 soldered straight to the USB socket,
-// and GPIO20/21 wired as UART0. GPIO8 is the onboard LED, GPIO9 the BOOT
-// button, GPIO11-17 the internal flash. That leaves GPIO0-4, 7, 10 general-
-// purpose — plus GPIO20/21 once "USB CDC On Boot" is enabled in the Arduino
-// IDE (which this project requires: it routes the serial console over native
-// USB and frees GPIO20/21 for other use).
+// Pin map for the ESP32-S3 SuperMini (no built-in display). Not usable:
+// GPIO0/3/45/46 (strapping), 19/20 (native USB D-/D+), 26-32 (flash), 33-37
+// (octal PSRAM on N8R8/N16R8 modules). Pots must sit on ADC1 (GPIO1-10):
+// ADC2 is unreliable while the radio is on. The SuperMini only brings out
+// roughly GPIO1-13 and 43/44, plus its WS2812 RGB LED on GPIO48, so
+// everything below lives on GPIO1-13. Check the silkscreen: clones differ.
 
-// I2S audio out (MAX98357A Class-D amp breakout). All three lines sit on the
-// amp side of the QFN32 package (GPIO3-10), on the highest-numbered pins
-// available there once the fixed/reserved ones (OLED on 5/6, onboard LED on
-// 8, BOOT button on 9) are excluded — keeps the amp wiring physically
-// clustered instead of crossing to the far side of the chip.
+// I2S audio out (MAX98357A Class-D amp breakout).
 // The same three lines also feed a purple PCM5100 DAC module (line out) in
 // parallel with the amp: BCK/LCK/DIN to these pins, SCK to GND (internal
 // PLL), VIN to 3V3, and back solder pads FLT/DEMP/FMT = L, XSMT = H (un-mute).
-#define PIN_I2S_BCK  4
-#define PIN_I2S_LRCK 7
-#define PIN_I2S_DOUT 10
+#define PIN_I2S_BCK  10
+#define PIN_I2S_LRCK 8
+#define PIN_I2S_DOUT 9
 
-// OLED — the board's built-in SSD1306, I2C, on fixed pins (not movable).
-#define PIN_OLED_SDA 5
-#define PIN_OLED_SCL 6
+// OLED — SSD1306 over I2C. The SuperMini has none, so the display is
+// compiled out (DISABLE_DISPLAY in display.h); these pins are reserved in
+// case an external one is added later.
+#define PIN_OLED_SDA 11
+#define PIN_OLED_SCL 12
 #define OLED_I2C_ADDR 0x3C
 
 // The SSD1306 controller has a 128x64 GDDRAM buffer, but this board's 0.42"
-// glass only shows a 72x40 window into it, offset to (30,12). Adafruit_SSD1306
+// glass only shows a 72x40 window into it, offset to (30,24). Adafruit_SSD1306
 // has no offset support, so display.cpp shifts every draw by (OLED_X_OFFSET,
-// OLED_Y_OFFSET) by hand. A few panels of this type centre at (28,24)
-// instead — nudge OLED_X_OFFSET / OLED_Y_OFFSET if the image is clipped.
+// OLED_Y_OFFSET) by hand. Other panels of this type sit at a slightly
+// different offset — nudge OLED_X_OFFSET / OLED_Y_OFFSET if the image is clipped.
 #define OLED_WIDTH   128  // full SSD1306 buffer, not the visible area
 #define OLED_HEIGHT  64
 #define OLED_VISIBLE_WIDTH  72
@@ -50,22 +46,22 @@ const int OLED_VOL_BAR_X_PX       = 32; // volume bar's left edge, from the wind
 // voice in the active patch (kPatches, voices.h) is pitched relative to
 // this single pitch pot and scaled by this single volume pot, so the pot
 // count no longer grows with the voice count.
-#define PIN_POT_VOL1 0
-#define PIN_POT_PITCH1 3
+#define PIN_POT_VOL1 1   // ADC1_CH0
+#define PIN_POT_PITCH1 2 // ADC1_CH1
 
-// Liveness LED — the board's onboard LED. Active-low: LOW turns it on.
-#define PIN_STATUS_LED 8
+// Liveness LED — the SuperMini's onboard WS2812 (GPIO48). RGB_BUILTIN comes
+// from the ESP32S3 Dev Module variant; digitalWrite() on it drives the RGB
+// LED (HIGH = on, white).
+#define PIN_STATUS_LED RGB_BUILTIN
 
 // Amplitude envelope gate switch — SPST, wired between this pin and GND,
 // read with the internal pull-up (INPUT_PULLUP): open = HIGH = note off,
 // closed = LOW = note held (envelope.h triggers attack on close, release on
-// open — see controls.cpp/audio_task.cpp). GPIO21 is UART0 TX, free here
-// because "USB CDC On Boot" moves the console off UART0.
-#define PIN_AUDIO_SWITCH 21
+// open — see controls.cpp/audio_task.cpp).
+#define PIN_AUDIO_SWITCH 7
 
 // Rotary encoder (bare EC11-style, 5 pins: A/B/C + isolated switch S1/S2).
-// C and S1 wire to GND; only A, B, and S2 need GPIOs, which uses up the
-// last of the general-purpose pins this board has free. Rotation cycles
+// C and S1 wire to GND; only A, B, and S2 need GPIOs. Rotation cycles
 // kPatches (voices.h); the push-button toggles the active patch's matched
 // distortion on/off. All three read with internal pull-ups (INPUT_PULLUP):
 // the encoder supplies none of its own.
@@ -74,11 +70,10 @@ const int OLED_VOL_BAR_X_PX       = 32; // volume bar's left edge, from the wind
 // orient it with the 3-pin row (A/C/B) on your left and the 2-pin switch
 // row on your right. The top-left pin (of the 3) and the top-right pin
 // (of the 2) are both ground — those are C and S1.
-#define PIN_ENCODER_A  1
-#define PIN_ENCODER_B  2
-// Wired to S2 (S1 -> GND). Lives on GPIO20 (freed up by moving PIN_I2S_BCK
-// off it), on the non-amp side with the other controls, not the amp side.
-#define PIN_ENCODER_SW 20
+#define PIN_ENCODER_A  4
+#define PIN_ENCODER_B  5
+// Wired to S2 (S1 -> GND).
+#define PIN_ENCODER_SW 6
 
 // This EC11-style encoder's detents land every 2 quadrature edges (not the
 // full 4-edge Gray cycle 00->01->11->10->00) — controls.cpp accumulates
@@ -115,9 +110,8 @@ const int OLED_VOL_BAR_X_PX       = 32; // volume bar's left edge, from the wind
 const int WAVETABLE_RAM_BUDGET_BYTES = 128 * 1024;
 
 // Per-voice volume is carried into the mixer as a Q15 fixed-point fraction
-// (0 .. VOLUME_Q15_ONE == 0.0 .. 1.0) so the per-sample mix stays integer-only
-// — the ESP32-C3 core has no hardware FPU, so a per-sample float multiply is a
-// software-emulated routine.
+// (0 .. VOLUME_Q15_ONE == 0.0 .. 1.0) so the per-sample mix stays
+// integer-only by design.
 const int VOLUME_Q15_SHIFT = 15;
 const int VOLUME_Q15_ONE   = (1 << VOLUME_Q15_SHIFT) - 1; // 32767
 

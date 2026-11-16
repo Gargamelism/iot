@@ -35,8 +35,11 @@ and learn exactly which pins you have to work with.
   native USB port, and that frees GPIO20/21.
 - **The C3.** One RISC-V core at 160 MHz, ~400 KB SRAM and no floating-point unit (this will
   matter from module 02 on).
-- **Strapping pins and reserved pins.** Learn what is soldered to what on *this* board: OLED
-  on GPIO5/6, LED on GPIO8, BOOT button on GPIO9, flash on GPIO11–17, USB on GPIO18/19.
+- **Strapping pins and reserved pins.** GPIO2, 8 and 9 are *strapping* pins: the chip samples
+  them at reset to choose its boot mode, so anything you wire there must not pull them the
+  wrong way while it resets. GPIO9 is the BOOT button and GPIO8 the LED; GPIO2 is free, with
+  care. Then learn what else is soldered to what on *this* board: OLED on GPIO5/6, flash on
+  GPIO11–17, USB on GPIO18/19.
 - **Active-low outputs.** The LED is on when the pin is LOW.
 - **The SSD1306.** The controller has a 128×64 buffer, but the 0.42" glass shows only a 72×40
   window at an offset. The Adafruit library knows nothing about that offset.

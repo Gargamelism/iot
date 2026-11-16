@@ -85,11 +85,11 @@ range while costing about one table lookup per sample.
 
 1. **Build** one period of saw, square and triangle from their harmonic weights (sum of
    sines) and plot them over the "ideal" shapes. Find the Gibbs overshoot.
-2. **Alias on purpose.** Generate a *naïve* sawtooth (a raw phase ramp) at 1,000 Hz and
-   3,520 Hz, fs = 44.1 kHz, then plot the log spectrum. Mark the true harmonics and label
+2. **Alias on purpose.** Generate a *naïve* sawtooth (a raw phase ramp) at 3,520 Hz,
+   fs = 44.1 kHz, then plot the log spectrum. Mark the true harmonics and label
    the folded ones.
 3. **Fix it.** Compare a band-limited version that keeps `n ≤ 22050 / f₀`. Listen to both
-   (`sounddevice`).
+   (`play()`).
 4. **Mip-map design.**
    - For an 80 Hz–1 kHz instrument with headroom for chords and vibrato above it, tabulate,
      per octave, how many harmonics you can keep when limiting against the octave's top edge
@@ -99,7 +99,7 @@ range while costing about one table lookup per sample.
 5. **Normalization.** For each spread, compare (a) Σ weights and (b) the actual peak of the
    built table. Which spreads waste the most headroom under (a)? Then randomize the harmonic
    phases: the peak changes, but does the sound?
-6. **RAM.** Write a function `bytes(spreads, levels, table_len)` and use it to fit your
+6. **RAM.** Write a function `table_bytes(spreads, levels, table_len)` and use it to fit your
    design under 128 KB. How much do you save by skipping levels no voice can reach?
 7. **Verify the real thing** (if you have an audio interface): record your device sweeping
    the saw, compute a spectrogram, and look for diagonal lines moving against the pitch.

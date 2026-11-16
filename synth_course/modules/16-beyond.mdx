@@ -80,9 +80,9 @@ Pick **one**.
 - **Random harmonic phases.** *Example:* the boot log shows each table's peak/RMS dropping by
   at least 2 dB, the 9-voice "PULS" patch sounds no worse, and you can raise its level by the
   gained headroom.
-- **Room.** *Example:* a Schroeder reverb (4 combs + 2 all-pass) on the mix at 22 kHz, with a
+- **Room.** *Example:* a Freeverb-style reverb (4 combs + 2 all-passes) on the mix, with a
   wet/dry amount per patch. RAM for delay lines ≤ 32 KB, total load still ≤ 60%. *Example*
-  log line: `reverb: 4 combs (1116..1617 samp), 2 AP, 27.6 KB, +410 cyc/frame`.
+  log line: `reverb: 4 combs (1116..1356 samp), 2 AP, 11.9 KB, +110 cyc/frame`.
 - **Karplus-Strong voice.** *Example:* a new "KS" spectrum type whose voices use a delay line
   instead of a table. A note at 110 Hz decays over ~3 s, pitch accuracy is within ±5 cents
   (fractional delay), and you reach 8 voices within budget.

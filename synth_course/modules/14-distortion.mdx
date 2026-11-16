@@ -36,8 +36,9 @@ does to a spectrum (including to a chord).
 - **Hard clip** (gain then clamp): many high harmonics, harsh.
 - **Soft clip.** A smooth curve such as cubic `x − x³/3` adds mostly the 3rd harmonic, so it
   sounds warm.
-- **Foldback.** Reflect the signal at a threshold instead of clamping: metallic, rich and
-  pitch-dependent. Bound the loop for real-time safety.
+- **Foldback.** Reflect the signal at a threshold instead of clamping: metallic and rich, and
+  its timbre changes sharply with level × drive (each extra fold adds a new set of harmonics).
+  Bound the loop for real-time safety.
 - **Bitcrush.** Zero the low bits to give quantization as an effect: noisy and lo-fi.
 - **Drive.** Gain before the shaper sets *how much* nonlinearity you get.
 - **Intermodulation.** Distorting a *sum* creates sum and difference tones between voices.
@@ -86,8 +87,8 @@ does to a spectrum (including to a chord).
 - Pick a flavor, a drive amount, and per-voice or post-mix.
 - A transfer-curve plot with the live input point moving along it, plus the output spectrum.
 - A 1–4 voice chord on a selectable spectrum.
-- You should hear intermodulation "mud" on post-mix chords, and foldback's timbre change with
-  pitch.
+- You should hear intermodulation "mud" on post-mix chords, and foldback's timbre change
+  abruptly as you turn up the drive or the level.
 
 **Reuses** the module 08 mixer and module 07 spectra. **New:** the shapers and the curve
 plot.
@@ -132,8 +133,8 @@ Start from module 10 or later. Distortion only needs the mixer and the patch tab
    "drive" means as the voice count changes.
 2. Where does distortion sit relative to the envelope and the filter? (Think of a guitar amp:
    which of these is "before" the amp?)
-3. Soft clip wants `/3`. Why is a reciprocal multiply better here than a shift by a power of
-   two?
+3. Soft clip wants `/3`. Why exactly 1/3, and what would rounding it to a shift (`/2` or
+   `/4`) do to the curve? Plot all three over −1…1.
 4. Should distortion be a fixed property of a patch, or should the toggle let any patch use
    any flavor?
 
@@ -144,7 +145,8 @@ Start from module 10 or later. Distortion only needs the mixer and the patch tab
   `DISTORTION_BITCRUSH_BITS` 8.
 - `synth/distortion.cpp`:
   - `softClip()` uses `kCubicReciprocalQ16` = 21846 instead of `/ 3`. The comment explains
-    why a power-of-two divisor would break the curve's monotonicity.
+    why: `/3` gives zero slope at the clamp, `/2` folds back before it, and `/4` meets it
+    with a corner.
   - `foldback()` caps reflections at `kMaxFoldIterations` = 8 and then clamps.
   - `bitcrush()` is a single mask.
 - `synth/audio_task.cpp`: distortion is applied per voice inside `#if

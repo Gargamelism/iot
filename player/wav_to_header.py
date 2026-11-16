@@ -21,7 +21,7 @@ from pathlib import Path
 SAMPLES_PER_LINE = 16
 
 # player.ino measures ~326000 bytes of flash before any clip data (see its
-# compile output). The ESP32-C3 board here has a 1310720-byte app partition;
+# compile output). The ESP32-S3 build here (default partition scheme) has a 1310720-byte app partition;
 # staying comfortably under the remainder leaves headroom for the linker's
 # other rodata. At 2 bytes/sample this caps a clip to ~20s at 22050 Hz mono
 # (or proportionally longer at a lower sample rate).

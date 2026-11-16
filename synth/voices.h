@@ -195,8 +195,8 @@ static constexpr Patch kPatches[] = {
 #define NUM_PATCHES ((int)(sizeof(kPatches) / sizeof(kPatches[0])))
 
 // Hard ceiling on any one patch's voice count, sized against the audio
-// budget: at ~13 cycles/voice, 32 voices is ~13% of the 3628 cycles/frame
-// available at 44.1 kHz on the 160 MHz C3 (~26% with pre-mix distortion).
+// budget: at ~13 cycles/voice, 32 voices is ~8% of the 5442 cycles/frame
+// available at 44.1 kHz on the 240 MHz S3 (~15% with pre-mix distortion).
 #define MAX_VOICES 32
 
 static_assert(NUM_PATCHES >= 1, "kPatches must have at least one patch");

@@ -17,10 +17,10 @@
 #include <ESP_I2S.h>
 #include "clip.h"
 
-#define PIN_I2S_BCK  4
-#define PIN_I2S_LRCK 7
-#define PIN_I2S_DOUT 10
-#define PIN_POT_VOL1 0
+#define PIN_I2S_BCK  10
+#define PIN_I2S_LRCK 8
+#define PIN_I2S_DOUT 9
+#define PIN_POT_VOL1 1
 
 const int ADC_RESOLUTION_BITS = 12;
 const int ADC_MAX_COUNT = (1 << ADC_RESOLUTION_BITS) - 1;
@@ -45,7 +45,7 @@ static int readOversampledVolume() {
 
 void setup() {
   Serial.begin(115200);
-  delay(200); // USB CDC enumeration, same board quirk as the synth sketch
+  delay(200); // let the native USB CDC console enumerate (as in the synth sketch)
 
   analogReadResolution(ADC_RESOLUTION_BITS);
   analogSetPinAttenuation(PIN_POT_VOL1, ADC_11db);

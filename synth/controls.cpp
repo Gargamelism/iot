@@ -182,10 +182,15 @@ static void updateVoiceFreqs(float pitchNorm, uint8_t patchIndex) {
 void controlsBegin() {
   analogReadResolution(ADC_RESOLUTION_BITS);
 
+  // The first analogRead() configures the pin as an ADC channel; on the S3
+  // core, setting attenuation before that fails ("Pin is not configured as
+  // analog channel").
+  analogRead(PIN_POT_VOL1);
   analogSetPinAttenuation(PIN_POT_VOL1, ADC_11db);
   s_volLastRaw = analogRead(PIN_POT_VOL1);
   s_volFiltered = s_volLastRaw;
 
+  analogRead(PIN_POT_PITCH1);
   analogSetPinAttenuation(PIN_POT_PITCH1, ADC_11db);
   s_pitchLastRaw = analogRead(PIN_POT_PITCH1);
   s_pitchFiltered = s_pitchLastRaw;
@@ -225,6 +230,11 @@ void controlsUpdate() {
   float volFiltered = smoothValue(volRaw, &s_volFiltered, &s_volLastRaw,
                                   ADC_HYSTERESIS_COUNTS, ADC_EMA_ALPHA);
   float volume = constrain(volFiltered / (float)ADC_MAX_COUNT, 0.0f, 1.0f);
+  // Dead zone: the hysteresis-gated EMA can freeze a few counts above 0, so
+  // force true silence at the bottom of the travel.
+  if (volFiltered < ADC_HYSTERESIS_COUNTS) {
+    volume = 0.0f;
+  }
 
   int pitchRaw = readOversampled(PIN_POT_PITCH1);
   float pitchFiltered = smoothValue(pitchRaw, &s_pitchFiltered, &s_pitchLastRaw,

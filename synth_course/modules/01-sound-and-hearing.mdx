@@ -69,8 +69,9 @@ later design choice has something to aim at.
 
 `01-sound-and-hearing.ipynb`:
 
-1. Synthesize 1 s of a sine at 220 Hz, then sums of harmonics with 1/n, odd-only 1/n and odd
-   1/n² amplitudes (saw, square and triangle). Plot two periods of each, plus a log-magnitude
+1. Synthesize 1 s of a sine at 220 Hz, then sums of harmonics with 1/n, odd-only 1/n and odd-only
+   1/n² amplitudes, the last with alternating sign (+1, −1/9, +1/25, …) (saw, square and
+   triangle). Plot two periods of each, plus a log-magnitude
    spectrum.
 2. **Phase test.** Render the saw with random harmonic phases. Plot it (it looks nothing like
    a saw) and listen to it A/B against the original.
@@ -130,7 +131,10 @@ against.
 There's no firmware to compare, but look at where these ideas show up:
 
 - `synth/harmonic_spreads.h`: `weightSaw`, `weightSquare` and `weightTriangle` are this
-  week's notebook in C++.
+  week's notebook in C++, with one difference: `weightTriangle` drops the alternating sign,
+  because `buildTable()` in `oscillator.cpp` divides the weights by their sum and so needs them
+  all positive. Plot it and you get a rounded, peaky wave rather than a triangle. It sounds
+  identical, which is step 2's lesson.
 - `synth/notes.h`: `freqToMidi` and `midiToFreq` are your ear-sheet formulas.
 - `scripts/harmonics_demo.py`: the repo's own Python exploration of harmonic recipes.
 

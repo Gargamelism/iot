@@ -64,8 +64,9 @@ Everything is listed in `synth/pins.h`; this is the shopping list.
 | A phone tuner app (any chromatic tuner) | pitch-accuracy checks |
 
 Software: `arduino-cli` (or Arduino IDE 2.x), the Espressif `esp32` core 3.x, the `Adafruit
-SSD1306` and `Adafruit GFX Library` libraries, Python 3 with `numpy`, `scipy`, `matplotlib`,
-`sounddevice` and Jupyter, and a current Chrome/Firefox for the playgrounds.
+SSD1306` and `Adafruit GFX Library` libraries, Docker (the course site and its Jupyter
+notebooks, with numpy, scipy and matplotlib, run in one container), and a current
+Chrome/Firefox for the playgrounds.
 
 ## How to use a module
 

@@ -1,10 +1,10 @@
 # synth_course
 
-Polyphonic wavetable synth on the ABRobot ESP32-C3 0.42" OLED board: a master volume pot and a pitch pot drive every voice in the `kVoices` table (`voices.h`), audio out over I2S to an external DAC, live status on the built-in 0.42" OLED, and a blinking onboard LED as a liveness indicator.
+Polyphonic wavetable synth on an ESP32-S3 SuperMini: a master volume pot and a pitch pot drive every voice in the `kVoices` table (`voices.h`), audio out over I2S to an external DAC, and a blinking onboard LED as a liveness indicator.
 
 ## Hardware
 
-- ABRobot ESP32-C3 0.42" OLED dev board — an ESP32-C3 with a **built-in** SSD1306 OLED (72x40 visible, I2C on GPIO5/6) and an onboard LED on GPIO8 used as a liveness indicator
+- ESP32-S3 SuperMini — no built-in display; its onboard WS2812 LED (GPIO48) is the liveness indicator. Wiring is in `synth/pins.h`
 - PCM5102 I2S DAC breakout
 - 2x potentiometers (master volume, pitch)
 
@@ -16,12 +16,9 @@ See `pins.h` for wiring/pin assignments.
 
 - [Arduino IDE](https://www.arduino.cc/en/software) 2.x (or `arduino-cli`)
 - **ESP32 board support**: install via Boards Manager → search "esp32" → install the Espressif "esp32" package (this project uses the Arduino-ESP32 core v3.x, which provides `ESP_I2S.h`)
-- **Board selection**: pick "ESP32C3 Dev Module" (FQBN `esp32:esp32:esp32c3`) under Tools → Board
-- **Tools settings**: set **USB CDC On Boot → "Enabled"**. This board wires GPIO20/21 as UART0, and the firmware puts the encoder switch on GPIO20 and the audio gate switch on GPIO21 — so the serial console must move to native USB or boot diagnostics are lost
-- **Libraries** (install via Library Manager):
-  - `Adafruit SSD1306`
-  - `Adafruit GFX Library`
-  - (Wire and ESP_I2S ship with the ESP32 board package — no separate install needed)
+- **Board selection**: the target is an ESP32-S3 SuperMini; pick "ESP32S3 Dev Module" (FQBN `esp32:esp32:esp32s3`) under Tools → Board
+- **Tools settings**: set **USB CDC On Boot → "Enabled"** (`CDCOnBoot=cdc`) so the serial console comes out of the native USB port, and leave PSRAM disabled (the SuperMini's ESP32-S3FH4R2 has 2 MB of quad PSRAM; the synth doesn't need it, and "OPI PSRAM" is wrong for this chip). With `arduino-cli`, pass the option in the FQBN: `--fqbn esp32:esp32:esp32s3:CDCOnBoot=cdc` for both compile and upload
+- **Libraries**: none needed by default — the SuperMini has no OLED, so the display is compiled out (`DISABLE_DISPLAY` in `synth/display.h`). To re-enable an external SSD1306, install `Adafruit SSD1306` and `Adafruit GFX Library` via Library Manager. ESP_I2S ships with the ESP32 board package
 
 ## Setup
 
