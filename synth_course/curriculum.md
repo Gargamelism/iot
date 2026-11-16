@@ -1,9 +1,9 @@
 ---
 id: curriculum
-title: Build a Wavetable Synth on an ESP32-C3
+title: Build a Wavetable Synth on an ESP32-S3
 ---
 
-# Build a Wavetable Synth on an ESP32-C3
+# Build a Wavetable Synth on an ESP32-S3
 
 A self-paced course for writing, from an empty sketch, a polyphonic wavetable synthesizer that
 matches what `synth/` in this repo can do, on the same hardware. The repo is the
@@ -32,8 +32,8 @@ A flashable synth with all of the following. Each is introduced by the module in
 - [ ] Up to 32 voices per patch, mixed with a no-clipping guarantee; detuned unisons (08)
 - [ ] Voices pitched as a diatonic chord that follows the pot through a key, in several
       modes (major, minor, harmonic/melodic minor, Phrygian, minor pentatonic, chromatic) (09)
-- [ ] A table of patches, validated at compile time, cycled by a rotary encoder, shown on the
-      board's 72×40 OLED (10)
+- [ ] A table of patches, validated at compile time, cycled by a rotary encoder, optionally shown on an
+      external 72×40 SSD1306 OLED (10)
 - [ ] A gate switch driving an ADSR amplitude envelope, with retrigger and short-note
       handling, and no clicks or zipper noise (11)
 - [ ] A brightness filter that darkens a pluck as it decays and opens with loudness (12)
@@ -52,7 +52,8 @@ Everything is listed in `synth/pins.h`; this is the shopping list.
 
 | Part | Notes |
 |---|---|
-| ABRobot ESP32-C3 0.42" OLED dev board | built-in SSD1306 (72×40 visible) on GPIO5/6, LED on GPIO8 |
+| ESP32-S3 SuperMini | no built-in display; WS2812 RGB LED on GPIO48; all wiring on GPIO1–13. Clones differ: check the silkscreen |
+| *Optional:* 0.42" SSD1306 I2C OLED (72×40 visible) | on GPIO11 (SDA) / GPIO12 (SCL); `synth/` compiles the display out by default (`DISABLE_DISPLAY`) |
 | PCM5100/PCM5102 I2S DAC module ("purple" board) | line out on a 3.5 mm jack. SCK→GND; pads FLT/DEMP/FMT = L, XSMT = H |
 | MAX98357A I2S class-D amp breakout + small 4–8 Ω speaker | wired in parallel with the DAC on the same 3 I2S lines |
 | 2 × linear potentiometers (10 kΩ is fine) | master volume, pitch |
@@ -64,7 +65,7 @@ Everything is listed in `synth/pins.h`; this is the shopping list.
 | A phone tuner app (any chromatic tuner) | pitch-accuracy checks |
 
 Software: `arduino-cli` (or Arduino IDE 2.x), the Espressif `esp32` core 3.x, the `Adafruit
-SSD1306` and `Adafruit GFX Library` libraries, Docker (the course site and its Jupyter
+SSD1306` and `Adafruit GFX Library` libraries (only for the optional OLED), Docker (the course site and its Jupyter
 notebooks, with numpy, scipy and matplotlib, run in one container), and a current
 Chrome/Firefox for the playgrounds.
 
@@ -90,10 +91,12 @@ then the milestone, then Compare.
 
 **Constraints that apply to every Build from module 04 on** (the "audio contract"):
 
-- The per-sample path is integer-only; float is fine once per block. The C3 has no FPU.
+- The per-sample path is integer-only; float is fine once per block. The S3 has an FPU, but
+  the repo stays integer-only by design.
 - The audio task never blocks on anything but the I2S write: no `malloc`, no `Serial`, no mutex
   wait, no `delay()`.
-- The budget is 160 MHz ÷ 44.1 kHz ≈ **3628 cycles per output frame**, all-in.
+- The budget is 240 MHz ÷ 44.1 kHz ≈ **5442 cycles per output frame**, all-in, on Core 0
+  (`loop()` runs on Core 1).
 - Nothing you add may make the mix clip unless you meant it to (distortion).
 
 ## Module map
@@ -104,7 +107,7 @@ then the milestone, then Compare.
 | 01 | [Sound & hearing](modules/01-sound-and-hearing.mdx) | 1 | — | no |
 | 02 | [Digital audio](modules/02-digital-audio.mdx) | 1 | 01 | no |
 | 03 | [Getting sound out: I2S](modules/03-i2s-sound-out.mdx) | 1 | 00, 02 | yes |
-| 04 | [Real time on one core](modules/04-real-time-one-core.mdx) | 1 | 03 | yes |
+| 04 | [Real time on a dedicated core](modules/04-real-time-one-core.mdx) | 1 | 03 | yes |
 | 05 | [Controls: pots, encoder, switch](modules/05-controls.mdx) | 1 | 04 | yes |
 | 06 | [The DDS oscillator](modules/06-dds-oscillator.mdx) | 1 | 02, 05 | yes |
 | 07 | [Additive timbre & band-limited wavetables](modules/07-band-limited-wavetables.mdx) | 1.5 | 06 | yes |
@@ -154,6 +157,6 @@ numbers refer to.
 | Jack Ganssle, *[A Guide to Debouncing](https://www.ganssle.com/debouncing.pdf)* (2004/2008) | 05 |
 | Ben Buxton, [Rotary encoder handler](https://github.com/buxtronix/arduino/tree/master/libraries/Rotary) | 05 |
 | UNSW Music Acoustics (Joe Wolfe et al.): [clarinet](https://www.phys.unsw.edu.au/jw/clarinetacoustics.html), [flute](https://www.phys.unsw.edu.au/jw/fluteacoustics.html), [brass](https://www.phys.unsw.edu.au/jw/brassacoustics.html), [measured note spectra](https://newt.phys.unsw.edu.au/music/) | 15 |
-| Espressif: [ESP32-C3 datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf) and [Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf); [ESP-IDF Programming Guide for the C3](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/) (I2S, ADC, FreeRTOS); [Arduino-ESP32 docs](https://docs.espressif.com/projects/arduino-esp32/en/latest/) | 00, 03, 04, 05 |
+| Espressif: [ESP32-S3 datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf) and [Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf); [ESP-IDF Programming Guide for the S3](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/) (I2S, ADC, FreeRTOS); [Arduino-ESP32 docs](https://docs.espressif.com/projects/arduino-esp32/en/latest/) | 00, 03, 04, 05 |
 | Datasheets: [TI PCM5102A](https://www.ti.com/lit/ds/symlink/pcm5102a.pdf), [MAX98357A](https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf) (plus [Adafruit's MAX98357 guide](https://learn.adafruit.com/adafruit-max98357-i2s-class-d-mono-amp)); Philips *[I²S bus specification](https://www.sparkfun.com/datasheets/BreakoutBoards/I2SBUS.pdf)* (1986, rev. 1996) | 03 |
 | Adafruit [GFX Graphics Library guide](https://learn.adafruit.com/adafruit-gfx-graphics-library) | 00, 10 |

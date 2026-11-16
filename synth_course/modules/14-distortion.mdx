@@ -45,7 +45,7 @@ does to a spectrum (including to a chord).
   Distorting each voice separately doesn't.
 - **Nonlinearity aliases.** New harmonics above Nyquist fold back. Oversampling is the
   textbook cure, and usually unaffordable here.
-- **No divides on the hot path.** The C3's hardware divide takes many cycles. Use a
+- **No divides on the hot path.** Integer divide on the S3 is still many times slower than a multiply. Use a
   multiply by a reciprocal instead.
 
 ## Read

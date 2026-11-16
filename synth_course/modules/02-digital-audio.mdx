@@ -24,7 +24,7 @@ fixed-point arithmetic you'll use on a chip without a floating-point unit.
 - State the sampling theorem and predict where any frequency aliases to.
 - Relate bit depth to dynamic range and quantization noise.
 - Represent fractions as Q15 integers, then multiply, scale and saturate them correctly.
-- Explain why a per-sample `float` multiply is expensive on the ESP32-C3.
+- Explain why the per-sample path stays integer-only even though the ESP32-S3 has an FPU.
 
 ## Concepts
 
@@ -36,8 +36,10 @@ fixed-point arithmetic you'll use on a chip without a floating-point unit.
   0.99997). Multiplying two Q15s gives a Q30 in 32 bits; shift right by 15 to get back.
   Rounding versus truncation.
 - **Overflow.** Two's-complement *wraparound* is a loud discontinuity; *saturation* clamps.
-- **No FPU.** On the C3, `float` math is a software library call: tens of cycles per
-  operation. Floats are fine once per block and not fine per sample.
+- **Integer by design.** The S3 has a single-precision FPU, but integer fixed-point is
+  deterministic, ports to FPU-less chips (like the ESP32-C3, where `float` is a software
+  library call costing tens of cycles), and maps directly onto 16-bit I2S samples. Floats are
+  fine once per block; the per-sample path stays integer.
 
 ## Read
 
@@ -130,7 +132,7 @@ of the course.
 ## Compare (spoiler)
 
 - `synth/pins.h`: `VOLUME_Q15_SHIFT` = 15 and `VOLUME_Q15_ONE` = 32767 (so "1.0" is
-  0x7FFF). The comment explains the no-FPU reasoning.
+  0x7FFF). The comment explains the integer-only reasoning.
 - `synth/oscillator.cpp` `normalizeVoiceLevelsQ15()`: truncation is chosen *on purpose* so
   that the sum of levels can never exceed one. That answers question 2.
 - `synth/audio_task.cpp`: the comment above `gainStepFixed` explains multiplying instead of

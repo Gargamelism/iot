@@ -39,7 +39,7 @@ deps: image
 
 dev: deps
 	docker run --rm --init -i $(TTY) --name $(DEV_CONTAINER) \
-		-p $(PORT):3000 -p $(JUPYTER_PORT):8888 \
+		-p 127.0.0.1:$(PORT):3000 -p 127.0.0.1:$(JUPYTER_PORT):8888 \
 		-e NEXT_PUBLIC_JUPYTER_URL=http://localhost:$(JUPYTER_PORT) \
 		$(MOUNTS) $(IMAGE)
 

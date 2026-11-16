@@ -12,6 +12,8 @@ export interface EngineStatus {
 export function useEngine() {
   const ref = useRef<{ ctx: AudioContext; node: AudioWorkletNode; analyser: AnalyserNode } | null>(null);
   const pending = useRef<unknown[]>([]);
+  // The context being set up while addModule() is in flight; cleared by unmount to cancel it.
+  const starting = useRef<AudioContext | null>(null);
   const [state, setState] = useState<"off" | "running" | "suspended">("off");
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [status, setStatus] = useState<EngineStatus>({ clipped: false, levels: [] });
@@ -26,8 +28,18 @@ export function useEngine() {
   const toggle = useCallback(async () => {
     try {
       if (!ref.current) {
+        if (starting.current) return; // a start is already in flight
         const ctx = new AudioContext({ sampleRate: SAMPLE_RATE_HZ });
-        await ctx.audioWorklet.addModule("/worklets/engine.js");
+        starting.current = ctx;
+        try {
+          await ctx.audioWorklet.addModule("/worklets/engine.js");
+        } catch (e) {
+          if (starting.current === ctx) starting.current = null;
+          void ctx.close();
+          throw e;
+        }
+        if (starting.current !== ctx) return; // unmounted meanwhile; cleanup closed ctx
+        starting.current = null;
         const node = new AudioWorkletNode(ctx, "engine", { numberOfInputs: 0, outputChannelCount: [2] });
         const an = ctx.createAnalyser();
         an.fftSize = 8192;
@@ -51,7 +63,15 @@ export function useEngine() {
     }
   }, []);
 
-  useEffect(() => () => void ref.current?.ctx.close(), []);
+  useEffect(
+    () => () => {
+      const ctx = ref.current?.ctx ?? starting.current;
+      ref.current = null;
+      starting.current = null;
+      void ctx?.close();
+    },
+    [],
+  );
 
   return { post, toggle, state, analyser, status, error };
 }

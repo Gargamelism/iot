@@ -230,9 +230,10 @@ void controlsUpdate() {
   float volFiltered = smoothValue(volRaw, &s_volFiltered, &s_volLastRaw,
                                   ADC_HYSTERESIS_COUNTS, ADC_EMA_ALPHA);
   float volume = constrain(volFiltered / (float)ADC_MAX_COUNT, 0.0f, 1.0f);
-  // Dead zone: the hysteresis-gated EMA can freeze a few counts above 0, so
+  // Dead zone: the hysteresis-gated EMA can freeze well above 0 (it stops
+  // updating once the raw reading settles), so gate on the raw reading to
   // force true silence at the bottom of the travel.
-  if (volFiltered < ADC_HYSTERESIS_COUNTS) {
+  if (volRaw < ADC_HYSTERESIS_COUNTS) {
     volume = 0.0f;
   }
 

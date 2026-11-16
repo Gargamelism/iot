@@ -5,15 +5,15 @@ weeks: 1
 prereqs: []
 milestones:
   - id: m00-compile
-    text: "An empty sketch compiles from the command line for the ESP32-C3 with USB CDC On Boot enabled."
+    text: "An empty sketch compiles from the command line for the ESP32-S3 with USB CDC On Boot enabled."
   - id: m00-blink
-    text: "The onboard LED blinks at 1 Hz (remember: it's active-low)."
+    text: "The onboard WS2812 RGB LED blinks at 1 Hz."
   - id: m00-serial
     text: "A boot message printed in setup() actually appears in the Serial Monitor after a reset, every time."
   - id: m00-oled
-    text: "The OLED shows a 1-pixel frame exactly around the visible 72×40 glass and a line of text inside it, with nothing cut off at any edge."
+    text: "(Optional, only if you add an external 0.42\" SSD1306) The OLED shows a 1-pixel frame exactly around the visible 72×40 glass and a line of text inside it, with nothing cut off at any edge."
   - id: m00-pinmap
-    text: "You've written your own pin map: every GPIO on the board, what it's tied to, and which ones are free for audio and controls."
+    text: "You've written your own pin map: every GPIO the board brings out, what it's tied to, and which ones are free for audio and controls."
 ---
 
 ## Goal
@@ -23,26 +23,30 @@ and learn exactly which pins you have to work with.
 
 ## You'll be able to
 
-- Build and flash an ESP32-C3 sketch from the command line, with the right board options.
+- Build and flash an ESP32-S3 sketch from the command line, with the right board options.
 - Use the serial console reliably on a native-USB chip.
-- Drive the built-in OLED, including this board's odd visible window.
+- Blink the SuperMini's onboard WS2812 RGB LED.
+- (Optional) Drive an external 0.42" SSD1306, including its odd visible window.
 - Read a board's pinout and datasheet and produce a pin budget before wiring anything.
 
 ## Concepts
 
 - **The Arduino-ESP32 stack.** `arduino-cli` → board package (`esp32:esp32`, core 3.x) → FQBN
-  `esp32:esp32:esp32c3` → board options. **USB CDC On Boot** moves `Serial` from UART0 to the
-  native USB port, and that frees GPIO20/21.
-- **The C3.** One RISC-V core at 160 MHz, ~400 KB SRAM and no floating-point unit (this will
-  matter from module 02 on).
-- **Strapping pins and reserved pins.** GPIO2, 8 and 9 are *strapping* pins: the chip samples
-  them at reset to choose its boot mode, so anything you wire there must not pull them the
-  wrong way while it resets. GPIO9 is the BOOT button and GPIO8 the LED; GPIO2 is free, with
-  care. Then learn what else is soldered to what on *this* board: OLED on GPIO5/6, flash on
-  GPIO11–17, USB on GPIO18/19.
-- **Active-low outputs.** The LED is on when the pin is LOW.
-- **The SSD1306.** The controller has a 128×64 buffer, but the 0.42" glass shows only a 72×40
-  window at an offset. The Adafruit library knows nothing about that offset.
+  `esp32:esp32:esp32s3` ("ESP32S3 Dev Module") → board options. **USB CDC On Boot** routes
+  `Serial` to the native USB port (GPIO19/20), which is the only USB connection on the
+  SuperMini. Leave PSRAM disabled.
+- **The S3.** Two Xtensa LX7 cores at 240 MHz, 512 KB SRAM and a single-precision FPU. Arduino
+  runs `loop()` on Core 1, leaving Core 0 free for audio (module 04).
+- **Strapping pins and reserved pins.** GPIO0, 3, 45 and 46 are *strapping* pins: the chip
+  samples them at reset to choose its boot mode, so don't wire anything there. GPIO19/20
+  carry USB, GPIO26–32 the flash and GPIO33–37 octal PSRAM on some modules. The SuperMini
+  itself only brings out roughly GPIO1–13 and 43/44, and has a WS2812 RGB LED on GPIO48.
+  Clones differ, so check your silkscreen.
+- **An addressable LED.** The WS2812 isn't a plain LED on a pin; it takes a serial data
+  stream. Arduino-ESP32 hides that: `digitalWrite(RGB_BUILTIN, HIGH)` lights it white.
+- **The SSD1306 (optional).** The SuperMini has no display. If you add an external 0.42"
+  SSD1306, its controller has a 128×64 buffer, but the glass shows only a 72×40 window at an
+  offset. The Adafruit library knows nothing about that offset.
 - **USB enumeration delay.** Prints made right after reset can vanish before the host has
   opened the port.
 
@@ -54,14 +58,14 @@ and learn exactly which pins you have to work with.
   cores and libraries, compiling and uploading (≈0.5 h).
 - Espressif, **[Arduino-ESP32 "Getting Started"](https://docs.espressif.com/projects/arduino-esp32/en/latest/getting_started.html)** and the
   **[GPIO](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/gpio.html)** API page (≈1 h).
-- Espressif, **[ESP32-C3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf)**: the *Pins* chapter (pin overview and the strapping
+- Espressif, **[ESP32-S3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf)**: the *Pins* chapter (pin overview and the strapping
   pins section) and the ADC rows of the peripheral pin table (≈1 h).
 - Adafruit, **["Adafruit GFX Graphics Library"](https://learn.adafruit.com/adafruit-gfx-graphics-library)** guide: coordinates, text and drawing
-  primitives (≈1 h).
+  primitives (≈1 h; only if you add the optional OLED).
 
 **Optional**
 
-- Espressif, **[ESP32-C3 Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf)**: the *IO MUX and GPIO Matrix* chapter,
+- Espressif, **[ESP32-S3 Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf)**: the *IO MUX and GPIO Matrix* chapter,
   for how any peripheral signal can be routed to (almost) any pin.
 
 ## Explore (notebook)
@@ -74,11 +78,11 @@ Module 01 starts using them for real.
 
 ## Play (playground)
 
-**OLED window finder.**
+**OLED window finder** (for the optional external OLED).
 - Shows a 128×64 SSD1306 buffer with a draggable 72×40 "glass" rectangle on top.
 - You draw text and shapes in buffer coordinates and see what the glass would show, with the
   offset readout updating as you drag.
-- You should see why anything drawn at (0,0) is invisible on this board.
+- You should see why anything drawn at (0,0) is invisible on this panel.
 
 **Reuses** the OLED renderer (`drawDisplay`) from `web_sim/app.js`. **New:** the draggable
 window.
@@ -91,18 +95,18 @@ window.
   with USB CDC On Boot enabled. *Example:*
 
   ```
-  arduino-cli compile --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc synth
-  arduino-cli upload  --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc -p /dev/cu.usbmodem1101 synth
+  arduino-cli compile --fqbn esp32:esp32:esp32s3:CDCOnBoot=cdc synth
+  arduino-cli upload  --fqbn esp32:esp32:esp32s3:CDCOnBoot=cdc -p /dev/cu.usbmodem1101 synth
   ```
-- **The liveness blink.** The LED toggles every 500 ms from `loop()`. Later this proves
+- **The liveness blink.** The WS2812 toggles every 500 ms from `loop()`. Later this proves
   `loop()` is still running while the audio task works. *Example:* with `millis()` you can
   blink without `delay()`, so `loop()` never stalls.
 - **A boot banner** on Serial that always arrives. *Example:*
 
   ```
-  boot: ESP32-C3 rev 0.4, 160 MHz, free heap 297412 bytes
+  boot: ESP32-S3 rev 0.2, 240 MHz, free heap 337460 bytes
   ```
-- **OLED hello.** Find the window offset yourself: draw a 1-pixel rectangle and nudge it until
+- **OLED hello** (optional, external SSD1306 on any two free GPIOs). Find the window offset yourself: draw a 1-pixel rectangle and nudge it until
   all four edges are visible. Then print a title inside it. *Example* of the visible window:
 
   ```
@@ -112,7 +116,7 @@ window.
   +----------------------+   (72 x 40 px)
   ```
 - **A pin map** as a header of `#define`s or `constexpr`s, with a comment per pin saying why it
-  was chosen. *Example:* `constexpr int PIN_STATUS_LED = 8;  // onboard, active-low`.
+  was chosen. *Example:* `constexpr int PIN_STATUS_LED = RGB_BUILTIN;  // onboard WS2812, GPIO48`.
 
 **Constraints:**
 
@@ -122,7 +126,7 @@ window.
   Plan for: 3 I2S lines, 2 ADC inputs, 3 encoder lines and 1 switch.
 
 **Deliverable:** a sketch folder (`synth/synth.ino` and your pin header) that blinks, prints
-and draws, plus your written pin map.
+(and draws, if you added the OLED), plus your written pin map.
 
 ## Hardware milestone
 
@@ -130,10 +134,10 @@ and draws, plus your written pin map.
 
 ## Design questions
 
-1. Which pins can read analog values *and* aren't taken by the OLED? How many does that leave
-   for two pots?
-2. You need 9 GPIOs (3 I2S, 2 pots, 3 encoder, 1 switch). Can you fit them without GPIO20/21?
-   What does freeing those cost you?
+1. Which pins can read analog values reliably while the radio is on (ADC1 vs ADC2), *and*
+   reach a header on the SuperMini? How many does that leave for two pots?
+2. You need 9 GPIOs (3 I2S, 2 pots, 3 encoder, 1 switch), plus 2 more for an optional OLED.
+   Which header pins are left once you drop strapping, USB and flash/PSRAM pins?
 3. Where do you want the I2S lines physically, given where the DAC and amp sit on your
    breadboard? Does the GPIO matrix let you choose?
 4. Why might an early `Serial.println` in `setup()` go missing, and what's the least hacky
@@ -142,9 +146,10 @@ and draws, plus your written pin map.
 ## Compare (spoiler)
 
 - `synth/pins.h`: the reference pin map. Its header comment lists every reserved pin. Note
-  `PIN_STATUS_LED` 8, the I2S lines on 4/7/10 (kept on the amp side of the package), the pots
-  on 0/3, the encoder on 1/2/20 and the gate switch on 21.
-- `OLED_X_OFFSET` 30 and `OLED_Y_OFFSET` 24 in `pins.h`, and the comment in `display.cpp`
+  `PIN_STATUS_LED` `RGB_BUILTIN` (GPIO48), the pots on ADC1 pins 1/2, the encoder on 4/5/6,
+  the gate switch on 7, the I2S lines on 8/9/10, and GPIO11/12 reserved for an optional OLED.
+- `DISABLE_DISPLAY` in `display.h`, which compiles the OLED out on the SuperMini. If you added
+  one: `OLED_X_OFFSET` 30 and `OLED_Y_OFFSET` 24 in `pins.h`, and the comment in `display.cpp`
   about shifting every draw. Is your offset the same?
 - `synth/synth.ino`: the `delay(200)` after `Serial.begin` and its comment about USB
   enumeration, plus the `millis()`-based blink with `BLINK_HALF_PERIOD_MS`.

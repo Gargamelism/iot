@@ -33,9 +33,9 @@ Each project has its own:
 - **Karplus-Strong.** A delay line plus a lowpass in a feedback loop: a physical model of a
   plucked string with real decay and inharmonic detail that tables can't give you.
 - **Per-voice envelopes.** Each chord note has its own life, as in a real piano.
-- **External control (MIDI).** The C3's native USB is a serial/JTAG port, not a USB-MIDI
-  device, and the board has no GPIO left. Bridging serial to MIDI on the host is the
-  practical path.
+- **External control (MIDI).** The S3's native USB can enumerate as a USB-MIDI device
+  (TinyUSB), at the cost of the CDC serial console; bridging serial to MIDI on the host keeps
+  the console. GPIO13 and 43/44 are still free for a DIN-MIDI UART.
 
 ## Read
 

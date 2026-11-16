@@ -7,14 +7,24 @@ function NoteBox({ moduleId, slot, label, initial }: { moduleId: string; slot: s
   const [value, setValue] = useState(initial);
   const [status, setStatus] = useState<"saved" | "editing" | "saving">("saved");
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pending = useRef<string | null>(null); // typed but not yet sent to saveNote
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  // Unmounting mid-debounce: send the pending text now rather than drop it.
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+      if (pending.current !== null) void saveNote(moduleId, slot, pending.current);
+    },
+    [moduleId, slot],
+  );
 
   function onChange(text: string) {
     setValue(text);
     setStatus("editing");
+    pending.current = text;
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
+      pending.current = null;
       setStatus("saving");
       await saveNote(moduleId, slot, text);
       setStatus("saved");

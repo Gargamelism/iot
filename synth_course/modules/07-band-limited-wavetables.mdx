@@ -179,8 +179,8 @@ and a written note of your band-limiting choices.
 
 ## Design questions
 
-1. Precompute or sum at runtime? Count the cycles of a runtime harmonic loop on the C3 (no
-   FPU, so integer sine lookups). How many harmonics could one voice afford, and how many
+1. Precompute or sum at runtime? Count the cycles of a runtime harmonic loop on the S3 (integer
+   sine lookups, per the audio contract). How many harmonics could one voice afford, and how many
    voices does that leave?
 2. How many harmonics does your lowest note need before more stops being audible? (Hint: 80
    Hz × n against your hearing and your speaker's range.)
