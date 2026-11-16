@@ -4,7 +4,7 @@
 // where the OLED isn't visible in the enclosure: this compiles the screen
 // out entirely (Adafruit_GFX/SSD1306 included) rather than just skipping
 // draws at runtime.
-// #define DISABLE_DISPLAY
+#define DISABLE_DISPLAY // the ESP32-S3 SuperMini has no OLED
 
 #ifdef DISABLE_DISPLAY
 

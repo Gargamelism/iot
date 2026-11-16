@@ -8,7 +8,7 @@
 // Composite wavetables: one full period of the harmonic sum, precomputed per
 // spread per mip level. A voice costs one lookup per sample instead of
 // summing NUM_HARMONICS sine terms, which is what makes 32 voices affordable
-// on the C3 (~13 cycles/voice against a 3628 cycle/frame budget).
+// (~13 cycles/voice against a 5442 cycle/frame budget at 240 MHz).
 //
 // Mip levels band-limit against aliasing: level L covers base frequencies
 // [WAVETABLE_MIP_BASE_HZ * 2^L, * 2^(L+1)) and is built with only the
@@ -89,5 +89,5 @@ void normalizeVoiceLevelsQ15(const uint8_t *levels, int count, int16_t *outQ15);
 
 // Sums `count` oscillator samples, each scaled by its Q15 volume
 // (0 .. VOLUME_Q15_ONE), into one clipped int16_t output sample. Integer-only
-// so it stays cheap in the per-sample audio loop on the FPU-less C3.
+// by design, so it stays cheap in the per-sample audio loop.
 int16_t mixOscillators(const int16_t *samples, const int16_t *volumesQ15, int count);

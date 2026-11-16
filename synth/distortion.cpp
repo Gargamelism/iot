@@ -13,13 +13,15 @@ static int16_t hardClip(int16_t sample) {
 
 // Cubic soft-clip: y = x - x^3/3, evaluated entirely in Q15 fixed point
 // (VOLUME_Q15_SHIFT, the same fixed-point format the mixer uses) so it
-// stays integer-only on the FPU-less C3. The curve is monotonic and
+// stays integer-only by design. The curve is monotonic and
 // self-bounded for |x| <= 32767, so no final clamp is needed.
 static int16_t softClip(int16_t sample) {
   // 1/3 as a Q16 reciprocal (65536/3 rounded up): a multiply-and-shift
   // instead of the multi-cycle hardware divide -Os emits for "/ 3". The
-  // error is under 1e-4, so the curve stays monotonic and self-bounded —
-  // which a power-of-two divisor would not preserve.
+  // error is under 1e-4. 1/3 is the coefficient whose slope reaches exactly
+  // 0 at the drive clamp (|x| = 1), so the curve meets the clamp with a
+  // smooth knee: /2 would turn over before it (non-monotonic), /4 would hit
+  // it with a corner.
   const int32_t kCubicReciprocalQ16 = 21846; // ~ (1 << 16) / 3
 
   int32_t x = clampToInt16((int32_t)sample * DISTORTION_DRIVE_GAIN);

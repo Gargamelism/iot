@@ -188,8 +188,8 @@ static void audioTask(void *arg) {
 
     // Blocking write paces the loop to real time; no delay() needed. If the
     // write comes up short (I2S not started, or a driver error) this
-    // max-priority task would otherwise spin Core 0 — the C3's only core —
-    // and freeze loop(), the display, and the liveness LED. Yield instead.
+    // max-priority task would otherwise spin Core 0 and starve its idle
+    // task, tripping the task watchdog. Yield instead.
     size_t written = s_i2s.write((uint8_t *)buffer, sizeof(buffer));
     if (written < sizeof(buffer)) {
       vTaskDelay(1);

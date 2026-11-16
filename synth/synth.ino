@@ -2,7 +2,8 @@
 // drive every voice in the active patch, an encoder cycles which patch
 // (voice table + pitch mode + matched distortion) plays and its click
 // toggles that distortion, audio out over I2S to an external DAC, live
-// status on the board's built-in 0.42" OLED.
+// status on an optional SSD1306 OLED (compiled out by default; the
+// ESP32-S3 SuperMini has none).
 // See voices.h for the instrument itself (kPatches), pins.h for wiring,
 // harmonic_spreads for each spread's overtone weights, oscillator/audio_task
 // for the DSP + Core-0 audio path, scale for the
@@ -18,9 +19,8 @@
 
 void setup() {
   Serial.begin(SERIAL_BAUD_RATE);
-  // This board needs "USB CDC On Boot" enabled (Arduino IDE -> Tools): it
-  // routes the console over native USB and frees GPIO20/21 for I2S. The USB
-  // port takes a moment to enumerate after reset — wait a beat so the
+  // This board needs "USB CDC On Boot" enabled (Arduino IDE -> Tools) so
+  // the console comes out of the native USB port. The USB port takes a moment to enumerate after reset — wait a beat so the
   // diagnostics below actually reach the Serial Monitor.
   delay(200);
 
@@ -50,9 +50,9 @@ void loop() {
   controlsUpdate();
 
   // Liveness blink — toggles at ~1Hz so a frozen loop() is visually
-  // obvious even while the synth is fully silent. Active-low LED.
+  // obvious even while the synth is fully silent.
   bool blinkOn = (millis() / BLINK_HALF_PERIOD_MS) % 2 == 0;
-  digitalWrite(PIN_STATUS_LED, blinkOn ? LOW : HIGH);
+  digitalWrite(PIN_STATUS_LED, blinkOn ? HIGH : LOW);
 
   uint32_t now = millis();
   if (now - lastDisplayMs >= DISPLAY_REFRESH_MS) {
