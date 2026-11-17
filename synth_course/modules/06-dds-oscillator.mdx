@@ -138,9 +138,9 @@ Start from module 05 (pots, encoder and switch driving a crude sine).
 - `synth/oscillator.h`: the `Oscillator` class, a 32-bit `phase_`/`phaseInc_` and
   `PHASE_ACCUMULATOR_RANGE` (2^32).
 - `synth/oscillator.cpp`: `PHASE_INDEX_SHIFT` = 22 (the top 10 bits index the 1,024-entry
-  table, guarded by a `static_assert`). `getIndex()`, `setFrequency()` computes the increment
-  in `double` at block rate, and `nextSample()` is one lookup with no interpolation, plus the
-  null-table guard.
+  table, guarded by a `static_assert`). `setFrequency()` computes the increment in `double` at
+  block rate, and `nextSample()` linearly interpolates adjacent entries with a 15-bit fraction,
+  reading a guard sample instead of wrapping, plus the null-table guard.
 - `synth/notes.h`: `freqToMidi`, `midiToFreq`, and `freqToNoteName` with its buffer-size
   reasoning.
 - `audio_task.cpp`: `setFrequency()` is called once per block per voice, never per sample.

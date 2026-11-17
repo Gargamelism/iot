@@ -1,20 +1,9 @@
 #include "display.h"
-
-#ifndef DISABLE_DISPLAY
-
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 #include "pins.h"
 #include "controls.h"
 #include "voices.h"
 #include "notes.h"
 #include "oscillator.h"
-
-// The SSD1306 buffer is 128x64; this board only shows a 72x40 window at
-// (OLED_X_OFFSET, OLED_Y_OFFSET), so every draw below is shifted by that.
-static Adafruit_SSD1306 s_display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
-static const char *k_Title = "SI SY";
 
 static const char *pitchModeCode(PitchMode mode) {
   switch (mode) {
@@ -38,6 +27,47 @@ static bool snapshotStatus(float *rootHz, float *volume, uint8_t *patchIndex,
   xSemaphoreGive(g_paramsMutex);
   return true;
 }
+
+#ifdef DISABLE_DISPLAY
+
+// No screen: print the same status as one Serial line (native USB CDC),
+// only when it changes, e.g. "A3  vol 62%  piano S4*  V3 DIA  D".
+void displayUpdate() {
+  float rootHz;
+  float volume;
+  uint8_t patchIndex;
+  bool distortionEnabled;
+  if (!snapshotStatus(&rootHz, &volume, &patchIndex, &distortionEnabled)) {
+    return;
+  }
+
+  char noteBuf[NOTE_NAME_BUF_SIZE];
+  freqToNoteName(rootHz, noteBuf);
+  const Patch &patch = kPatches[patchIndex];
+
+  static char s_lastLine[64];
+  char line[sizeof(s_lastLine)];
+  snprintf(line, sizeof(line), "%-3s vol %3d%%  %s S%d%s  V%d %s%s",
+           noteBuf, (int)(volume * 100.0f + 0.5f), patch.label,
+           (int)patch.voices[0].spread + 1, patchSpreadsMixed(patch) ? "*" : "",
+           patch.voiceCount, pitchModeCode(patch.pitchMode),
+           distortionEnabled ? "  D" : "");
+  if (strcmp(line, s_lastLine) != 0) {
+    strcpy(s_lastLine, line);
+    Serial.println(line);
+  }
+}
+
+#else
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// The SSD1306 buffer is 128x64; this board only shows a 72x40 window at
+// (OLED_X_OFFSET, OLED_Y_OFFSET), so every draw below is shifted by that.
+static Adafruit_SSD1306 s_display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
+static const char *k_Title = "SI SY";
 
 static int rowY(int row) {
   return OLED_Y_OFFSET + OLED_STATUS_ROW_TOP_PX + row * OLED_STATUS_ROW_SPACING_PX;

@@ -6,9 +6,9 @@
 #include "harmonic_spreads.h"  // HarmonicSpread + per-spread weights
 
 // Composite wavetables: one full period of the harmonic sum, precomputed per
-// spread per mip level. A voice costs one lookup per sample instead of
-// summing NUM_HARMONICS sine terms, which is what makes 32 voices affordable
-// (~13 cycles/voice against a 5442 cycle/frame budget at 240 MHz).
+// spread per mip level. A voice costs two adjacent lookups, linearly
+// interpolated, per sample instead of summing NUM_HARMONICS sine terms, which
+// is what makes 32 voices affordable (~20 cycles/voice against a 5442 cycle/frame budget at 240 MHz).
 //
 // Mip levels band-limit against aliasing: level L covers base frequencies
 // [WAVETABLE_MIP_BASE_HZ * 2^L, * 2^(L+1)) and is built with only the
@@ -16,6 +16,8 @@
 const int WAVETABLE_SIZE = SINE_TABLE_SIZE; // same size as the sine table, so
                                             // building a composite is an exact
                                             // lookup with no resampling
+const int WAVETABLE_TABLE_ENTRIES = WAVETABLE_SIZE + 1; // +1 guard sample = table[0], so the
+                                                        // interpolated read of table[i+1] never wraps
 const int WAVETABLE_MIP_LEVELS = 9;         // 80 Hz -> Nyquist is log2(22050/80) ~ 8.1 octaves
 const float WAVETABLE_MIP_BASE_HZ = FREQ_MIN_HZ;
 
@@ -27,7 +29,7 @@ extern const int16_t *g_wavetable[SPREAD_COUNT][WAVETABLE_MIP_LEVELS];
 // Builds the wavetables for every spread any kPatches entry mentions (not
 // just the one active at startup, since the encoder can switch patches at
 // runtime). Returns false if an allocation failed (each table is
-// WAVETABLE_SIZE * 2 bytes, 9 per spread). Call once from setup(), after
+// WAVETABLE_TABLE_ENTRIES * 2 bytes, 9 per spread). Call once from setup(), after
 // initSineTable().
 bool initWavetables();
 
@@ -60,7 +62,7 @@ public:
   // Also re-picks the mip level, so this must be called whenever the
   // frequency changes (once per block per voice, off the per-sample path).
   void setFrequency(float freqHz);
-  // One table lookup, bounded by +-SINE_TABLE_AMPLITUDE — the peak
+  // Linearly interpolated between adjacent table entries, so still bounded by +-SINE_TABLE_AMPLITUDE — the peak
   // mixOscillators assumes each voice respects.
   int16_t nextSample();
 
@@ -82,12 +84,19 @@ void initSineTable();
 
 // Normalizes `count` relative voice levels (VoiceConfig::level) into Q15
 // weights that sum to at most VOLUME_Q15_ONE. That is the headroom
-// guarantee: with every voice at its normalized level and the master volume
-// at full, the mix peaks at SINE_TABLE_AMPLITUDE no matter how many voices
-// there are, so mixOscillators can never clip.
+// guarantee: with every voice at its normalized level, the mix peaks at
+// SINE_TABLE_AMPLITUDE no matter how many voices there are, so
+// mixOscillators can never clip. The master volume is applied after the mix
+// (see scaleToOutputQ31).
 void normalizeVoiceLevelsQ15(const uint8_t *levels, int count, int16_t *outQ15);
 
 // Sums `count` oscillator samples, each scaled by its Q15 volume
 // (0 .. VOLUME_Q15_ONE), into one clipped int16_t output sample. Integer-only
 // by design, so it stays cheap in the per-sample audio loop.
 int16_t mixOscillators(const int16_t *samples, const int16_t *volumesQ15, int count);
+
+// Scales a full-level sample by a Q30 gain (0 .. VOLUME_Q15_ONE²) into the top of a
+// 32-bit I2S slot, keeping the low bits that a 16-bit output would drop.
+inline int32_t scaleToOutputQ31(int16_t x, int32_t gainQ30) {
+  return (int32_t)(((int64_t)x * gainQ30) >> 14);
+}

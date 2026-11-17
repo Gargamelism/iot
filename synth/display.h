@@ -9,7 +9,11 @@
 #ifdef DISABLE_DISPLAY
 
 inline bool displayBegin() { return true; }
-inline void displayUpdate() {}
+
+// Prints the status (root note, master volume, patch/spread, voice count and
+// pitch mode, distortion) to Serial whenever it changes.
+// Call periodically from loop() (see DISPLAY_REFRESH_MS).
+void displayUpdate();
 
 #else
 

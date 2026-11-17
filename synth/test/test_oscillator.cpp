@@ -40,14 +40,17 @@ static void runTests() {
 
   // Headroom invariant: each table's harmonic weights are normalized to sum
   // to VOLUME_Q15_ONE, so no entry may exceed SINE_TABLE_AMPLITUDE — the
-  // bound mixOscillators assumes every voice respects.
+  // bound mixOscillators assumes every voice respects. The guard sample at
+  // index WAVETABLE_SIZE is bounds-checked too, and must equal table[0] so
+  // the interpolated read of table[i + 1] wraps seamlessly.
   for (int spread = 0; spread < SPREAD_COUNT; spread++) {
     for (int level = 0; level < WAVETABLE_MIP_LEVELS; level++) {
       const int16_t *table = g_wavetable[spread][level];
       if (table == nullptr) continue; // spread not referenced by any kPatches entry
-      for (int i = 0; i < WAVETABLE_SIZE; i++) {
+      for (int i = 0; i < WAVETABLE_TABLE_ENTRIES; i++) {
         CHECK(table[i] >= -SINE_TABLE_AMPLITUDE && table[i] <= SINE_TABLE_AMPLITUDE);
       }
+      CHECK(table[WAVETABLE_SIZE] == table[0]);
     }
   }
 
@@ -82,6 +85,43 @@ static void runTests() {
     CHECK(osc.nextSample() == walkTable[i]);
   }
   CHECK(osc.nextSample() == walkTable[0]); // wrapped
+
+  // Clarity: a 1 kHz SPREAD_SINE read with interpolation must have at least
+  // 20 dB less total error against an ideal sine than the old truncated read
+  // (table[phase >> 22]). Total residual power bounds the largest spur, so
+  // this needs no FFT. Measured: truncated ~80 LSB RMS, interpolated ~1.5,
+  // mostly the table's own build error.
+  {
+    const float clarityHz = 1000.0f;
+    const int16_t *table = g_wavetable[SPREAD_SINE][mipLevelForFreq(clarityHz)];
+    CHECK(table != nullptr);
+    if (table != nullptr) {
+      Oscillator sine;
+      sine.begin(SPREAD_SINE);
+      sine.setFrequency(clarityHz);
+      // Same parenthesization as setFrequency(), so the mirrored phase never drifts.
+      const uint32_t inc = (uint32_t)((double)clarityHz * (PHASE_ACCUMULATOR_RANGE / SAMPLE_RATE_HZ));
+      uint32_t phase = 0;
+      double sumInterp = 0.0, sumTrunc = 0.0;
+      bool bounded = true;
+      for (int n = 0; n < SAMPLE_RATE_HZ; n++) {
+        const double ideal = (double)std::lround(
+            SINE_TABLE_AMPLITUDE * std::sin(2.0 * M_PI * phase / PHASE_ACCUMULATOR_RANGE));
+        const int16_t interp = sine.nextSample();
+        const double eInterp = interp - ideal;
+        const double eTrunc = table[phase >> 22] - ideal;
+        sumInterp += eInterp * eInterp;
+        sumTrunc += eTrunc * eTrunc;
+        if (interp < -SINE_TABLE_AMPLITUDE || interp > SINE_TABLE_AMPLITUDE) bounded = false;
+        phase += inc;
+      }
+      const double rmsInterp = std::sqrt(sumInterp / SAMPLE_RATE_HZ);
+      const double rmsTrunc = std::sqrt(sumTrunc / SAMPLE_RATE_HZ);
+      CHECK(rmsInterp * 10.0 <= rmsTrunc);
+      CHECK(rmsInterp < 3.0);
+      CHECK(bounded);
+    }
+  }
 
   // A voice picks its table from the frequency, so the same oscillator reads
   // a shorter harmonic series once it climbs into the next octave.
@@ -147,6 +187,26 @@ static void runTests() {
     int16_t volumes[1] = {8192};
     CHECK(mixOscillators(samples, volumes, 1) == 250);
   }
+
+  // scaleToOutputQ31: unity gain fills the 32-bit slot without wrapping, and
+  // its top 16 bits match the old 16-bit output to within 2 LSB.
+  {
+    const int32_t g = (int32_t)VOLUME_Q15_ONE * VOLUME_Q15_ONE;
+    CHECK(scaleToOutputQ31(32767, g) == 2147287045);
+    CHECK(scaleToOutputQ31(-32768, g) == -2147352578);
+    CHECK((scaleToOutputQ31(32767, g) >> 16) == 32765);
+    CHECK((scaleToOutputQ31(-32768, g) >> 16) == -32767);
+  }
+  // Quiet playing keeps its low bits: at ~1% master, 1000 and 1001 stay
+  // distinct (the old two-step >>15 path gave 9 for both).
+  {
+    const int32_t g1 = (int32_t)VOLUME_Q15_ONE * 327;
+    CHECK(scaleToOutputQ31(1000, g1) == 653980);
+    CHECK(scaleToOutputQ31(1001, g1) == 654634);
+  }
+  // Gain 0 is exact silence.
+  CHECK(scaleToOutputQ31(32767, 0) == 0);
+  CHECK(scaleToOutputQ31(-32768, 0) == 0);
 }
 
 TEST_MAIN()

@@ -211,8 +211,8 @@ One answer lives in `synth/oscillator.h`, `synth/oscillator.cpp` and
 - `buildTable()` normalizes the weights to sum to `VOLUME_Q15_ONE` (the worst-case bound),
   then **rescales to the measured peak** so every table uses the full `SINE_TABLE_AMPLITUDE`.
   Compare this with your question about headroom.
-- `Oscillator::setFrequency()` picks the mip level once per block. `nextSample()` is a single
-  lookup with **no interpolation** into 1,024-entry tables.
+- `Oscillator::setFrequency()` picks the mip level once per block. `nextSample()` is two adjacent
+  lookups, **linearly interpolated**, into 1,024(+1 guard)-entry tables.
 - `plans/2026-09-06_max_voices_and_distortion_headroom.md` has the measured numbers behind
   "precompute": about 14 cycles per harmonic at runtime against about 13 cycles per voice
   with tables.

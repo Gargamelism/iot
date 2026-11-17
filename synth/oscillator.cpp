@@ -7,14 +7,16 @@ int16_t g_sineTable[SINE_TABLE_SIZE];
 const int16_t *g_wavetable[SPREAD_COUNT][WAVETABLE_MIP_LEVELS] = {};
 
 // SINE_TABLE_SIZE (1024) is 2^10, so the top 10 bits of the 32-bit phase
-// accumulator select the table entry directly.
+// accumulator select the table entry and the next 15 bits are the fraction
+// nextSample() interpolates by. 15, not 16: |b - a| can reach 64000, and
+// 64000 * (2^15 - 1) still fits int32_t.
 const int PHASE_INDEX_SHIFT = 22;
 static_assert((1u << (32 - PHASE_INDEX_SHIFT)) == SINE_TABLE_SIZE,
               "PHASE_INDEX_SHIFT must match SINE_TABLE_SIZE");
-
-static inline int getIndex(uint32_t phase) {
-  return (int)(phase >> PHASE_INDEX_SHIFT);
-}
+const int PHASE_FRAC_BITS = 15;
+const int PHASE_FRAC_SHIFT = PHASE_INDEX_SHIFT - PHASE_FRAC_BITS;
+const int32_t PHASE_FRAC_MASK = (1 << PHASE_FRAC_BITS) - 1;
+static_assert(PHASE_FRAC_SHIFT >= 0, "fraction must fit below the index bits");
 
 void initSineTable() {
   for (int tableIndex = 0; tableIndex < SINE_TABLE_SIZE; tableIndex++) {
@@ -73,7 +75,7 @@ size_t wavetableBytesAllocated() {
   size_t bytes = 0;
   for (int spread = 0; spread < SPREAD_COUNT; spread++) {
     for (int level = 0; level < WAVETABLE_MIP_LEVELS; level++) {
-      if (g_wavetable[spread][level] != nullptr) bytes += WAVETABLE_SIZE * sizeof(int16_t);
+      if (g_wavetable[spread][level] != nullptr) bytes += WAVETABLE_TABLE_ENTRIES * sizeof(int16_t);
     }
   }
   return bytes;
@@ -127,6 +129,7 @@ static void buildTable(int16_t *table, int spread, int harmonicCount, float cent
   for (int i = 0; i < WAVETABLE_SIZE; i++) {
     table[i] = (int16_t)((int32_t)table[i] * SINE_TABLE_AMPLITUDE / peak);
   }
+  table[WAVETABLE_SIZE] = table[0]; // guard: nextSample() reads table[i + 1] without wrapping
 }
 
 bool initWavetables() {
@@ -153,7 +156,7 @@ bool initWavetables() {
     if (!spreadUsed[spread]) continue; // unused spreads cost no RAM
     for (int level = 0; level <= maxLevel[spread]; level++) {
       if (g_wavetable[spread][level] != nullptr) continue;
-      int16_t *table = (int16_t *)malloc(WAVETABLE_SIZE * sizeof(int16_t));
+      int16_t *table = (int16_t *)malloc(WAVETABLE_TABLE_ENTRIES * sizeof(int16_t));
       if (table == nullptr) {
         ok = false;
         continue;
@@ -187,7 +190,13 @@ int16_t Oscillator::nextSample() {
   // Guards the case where initWavetables() could not allocate: silence is
   // survivable on the audio task, a null dereference is not.
   if (table_ == nullptr) return 0;
-  const int16_t sample = table_[getIndex(phase_)];
+  // Linear interpolation between table[i] and table[i + 1]. The result lies
+  // between a and b (the >> floors, and frac < 2^15), so the bound holds.
+  const uint32_t i = phase_ >> PHASE_INDEX_SHIFT;
+  const int32_t frac = (int32_t)(phase_ >> PHASE_FRAC_SHIFT) & PHASE_FRAC_MASK;
+  const int32_t a = table_[i];
+  const int32_t b = table_[i + 1];
+  const int16_t sample = (int16_t)(a + (((b - a) * frac) >> PHASE_FRAC_BITS));
   phase_ += phaseInc_;
   return sample;
 }
