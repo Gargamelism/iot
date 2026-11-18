@@ -10,15 +10,18 @@
 // interpolated, per sample instead of summing NUM_HARMONICS sine terms, which
 // is what makes 32 voices affordable (~20 cycles/voice against a 5442 cycle/frame budget at 240 MHz).
 //
-// Mip levels band-limit against aliasing: level L covers base frequencies
-// [WAVETABLE_MIP_BASE_HZ * 2^L, * 2^(L+1)) and is built with only the
-// harmonics that stay under Nyquist across all of that range.
+// Mip levels band-limit against aliasing: level L covers the half-octave of
+// base frequencies [WAVETABLE_MIP_BASE_HZ * 2^(L/2), * 2^((L+1)/2)) and is
+// built with only the harmonics that stay under Nyquist across all of that
+// range. A level identical to the one below it shares that one's table.
 const int WAVETABLE_SIZE = SINE_TABLE_SIZE; // same size as the sine table, so
                                             // building a composite is an exact
                                             // lookup with no resampling
 const int WAVETABLE_TABLE_ENTRIES = WAVETABLE_SIZE + 1; // +1 guard sample = table[0], so the
                                                         // interpolated read of table[i+1] never wraps
-const int WAVETABLE_MIP_LEVELS = 9;         // 80 Hz -> Nyquist is log2(22050/80) ~ 8.1 octaves
+const int WAVETABLE_MIP_OCTAVES = 9;        // 80 Hz -> Nyquist is log2(22050/80) ~ 8.1 octaves
+const int WAVETABLE_MIPS_PER_OCTAVE = 2;
+const int WAVETABLE_MIP_LEVELS = WAVETABLE_MIP_OCTAVES * WAVETABLE_MIPS_PER_OCTAVE;
 const float WAVETABLE_MIP_BASE_HZ = FREQ_MIN_HZ;
 
 // g_wavetable[spread][level] is null unless some voice in some kPatches
@@ -29,8 +32,9 @@ extern const int16_t *g_wavetable[SPREAD_COUNT][WAVETABLE_MIP_LEVELS];
 // Builds the wavetables for every spread any kPatches entry mentions (not
 // just the one active at startup, since the encoder can switch patches at
 // runtime). Returns false if an allocation failed (each table is
-// WAVETABLE_TABLE_ENTRIES * 2 bytes, 9 per spread). Call once from setup(), after
-// initSineTable().
+// WAVETABLE_TABLE_ENTRIES * 2 bytes, up to WAVETABLE_MIP_LEVELS per spread;
+// levels identical to the one below share its table). Call once from
+// setup(), after initSineTable().
 bool initWavetables();
 
 // Mip level for a playback frequency, clamped to the pyramid.
@@ -39,7 +43,7 @@ int mipLevelForFreq(float freqHz);
 // How many harmonics level `level` keeps. Exposed for the band-limiting test.
 int harmonicsForMipLevel(int level);
 
-// Geometric centre of level `level`'s octave — the fundamental its table's
+// Geometric centre of level `level`'s half-octave — the fundamental its table's
 // harmonic weights are evaluated at.
 float mipLevelCentreHz(int level);
 
@@ -50,8 +54,8 @@ float mipLevelCentreHz(int level);
 // recompute the same total and check it against WAVETABLE_RAM_BUDGET_BYTES.
 int maxMipLevelForSpread(int spread);
 
-// Total bytes currently held by g_wavetable's non-null entries — what
-// initWavetables() actually allocated. setup() prints this next to free
+// Total bytes held by g_wavetable's unique non-null tables (a shared table
+// counts once) — what initWavetables() actually allocated. setup() prints this next to free
 // heap; test_oscillator.cpp checks it against WAVETABLE_RAM_BUDGET_BYTES.
 size_t wavetableBytesAllocated();
 

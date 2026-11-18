@@ -206,7 +206,8 @@ One answer lives in `synth/oscillator.h`, `synth/oscillator.cpp` and
   `maxMipLevelForSpread()`, the highest level any voice can reach plus margins for scale
   snapping and vibrato. `wavetableBytesAllocated()` is printed at boot against
   `WAVETABLE_RAM_BUDGET_BYTES`.
-- `harmonicsForMipLevel()` band-limits against the **top** of each octave.
+- `harmonicsForMipLevel()` band-limits against the **top** of each half-octave level (two per octave). Levels
+  that come out identical share one table.
   `mipLevelCentreHz()` is where Hz-dependent weights are evaluated.
 - `buildTable()` normalizes the weights to sum to `VOLUME_Q15_ONE` (the worst-case bound),
   then **rescales to the measured peak** so every table uses the full `SINE_TABLE_AMPLITUDE`.

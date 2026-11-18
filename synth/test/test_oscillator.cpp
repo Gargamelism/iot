@@ -1,11 +1,13 @@
 #include "../oscillator.h"
 #include "../voices.h"
 #include "framework.h"
+#include <cstring>
 
-// Expected harmonic count per mip level: level L covers [80 * 2^L, 80 *
-// 2^(L+1)) Hz and keeps only the harmonics that stay under Nyquist at the
-// TOP of that range, capped at NUM_HARMONICS (64).
-static const int kExpectedHarmonics[WAVETABLE_MIP_LEVELS] = {64, 64, 34, 17, 8, 4, 2, 1, 1};
+// Expected harmonic count per mip level: level L covers the half-octave
+// [80 * 2^(L/2), 80 * 2^((L+1)/2)) Hz and keeps only the harmonics that stay
+// under Nyquist at the TOP of that range, capped at NUM_HARMONICS (64).
+static const int kExpectedHarmonics[WAVETABLE_MIP_LEVELS] = {
+    64, 64, 64, 64, 48, 34, 24, 17, 12, 8, 6, 4, 3, 2, 1, 1, 1, 1};
 
 static void runTests() {
   initSineTable();
@@ -27,16 +29,52 @@ static void runTests() {
   for (int level = 0; level < WAVETABLE_MIP_LEVELS; level++) {
     const int count = harmonicsForMipLevel(level);
     CHECK(count == kExpectedHarmonics[level]);
-    const float topHz = WAVETABLE_MIP_BASE_HZ * (float)(2 << level);
+    const float topHz = WAVETABLE_MIP_BASE_HZ * exp2f((float)(level + 1) / WAVETABLE_MIPS_PER_OCTAVE);
     CHECK(count == 1 || count * topHz < SAMPLE_RATE_HZ / 2.0f);
+    // The step's goal: a note at the level's BOTTOM still reaches Nyquist/sqrt2
+    // (the next harmonic up would be past it), not Nyquist/2 as with one level
+    // per octave.
+    if (count > 1 && count < NUM_HARMONICS) {
+      const float bottomHz = WAVETABLE_MIP_BASE_HZ * exp2f((float)level / WAVETABLE_MIPS_PER_OCTAVE);
+      CHECK(count * bottomHz >= SAMPLE_RATE_HZ / 2.0f / sqrtf(2.0f) - bottomHz);
+    }
   }
 
   // Mip selection over the pyramid's range, including the clamps at both ends.
   CHECK(mipLevelForFreq(80.0f) == 0);
   CHECK(mipLevelForFreq(40.0f) == 0);
-  CHECK(mipLevelForFreq(640.0f) == 3);
-  CHECK(mipLevelForFreq(1280.0f) == 4);
-  CHECK(mipLevelForFreq(21000.0f) == 8);
+  CHECK(mipLevelForFreq(120.0f) == 1); // mid-octave: only half-octave levels split it
+  CHECK(mipLevelForFreq(640.0f) == 6);
+  CHECK(mipLevelForFreq(1280.0f) == 8);
+  CHECK(mipLevelForFreq(21000.0f) == 16);
+
+  // Sharing: a level identical to the one below shares its table, so two
+  // distinct non-null pointers on adjacent levels must hold different data.
+  // The byte count is checked against an independent distinct-pointer count,
+  // not the "differs from below" rule wavetableBytesAllocated() uses.
+  {
+    const size_t tableBytes = WAVETABLE_TABLE_ENTRIES * sizeof(int16_t);
+    size_t uniqueTables = 0;
+    bool anyShared = false;
+    for (int s = 0; s < SPREAD_COUNT; s++) {
+      for (int level = 0; level < WAVETABLE_MIP_LEVELS; level++) {
+        const int16_t *table = g_wavetable[s][level];
+        if (table == nullptr) continue;
+        if (level > 0) {
+          const int16_t *below = g_wavetable[s][level - 1];
+          if (below != nullptr && below != table) CHECK(memcmp(table, below, tableBytes) != 0);
+        }
+        bool seen = false;
+        for (int prev = 0; prev < level; prev++) {
+          if (g_wavetable[s][prev] == table) seen = true;
+        }
+        if (!seen) uniqueTables++;
+      }
+      if (g_wavetable[s][0] != nullptr && g_wavetable[s][1] == g_wavetable[s][0]) anyShared = true;
+    }
+    CHECK(wavetableBytesAllocated() == uniqueTables * tableBytes);
+    CHECK(anyShared);
+  }
 
   // Headroom invariant: each table's harmonic weights are normalized to sum
   // to VOLUME_Q15_ONE, so no entry may exceed SINE_TABLE_AMPLITUDE — the
@@ -75,6 +113,8 @@ static void runTests() {
   // At freq = SAMPLE_RATE_HZ / WAVETABLE_SIZE the phase increment is exactly
   // 2^32 / WAVETABLE_SIZE, so each nextSample() advances the table index by
   // exactly 1 and the oscillator must walk its table in order, then wrap.
+  // kPatches[0].voices[0] is SPREAD_VIOLA, whose weights depend on Hz, so its
+  // levels are never shared — the "next level" check below relies on that.
   const HarmonicSpread spread = (HarmonicSpread)kPatches[0].voices[0].spread;
   const float walkHz = (float)SAMPLE_RATE_HZ / WAVETABLE_SIZE;
   const int16_t *walkTable = g_wavetable[spread][mipLevelForFreq(walkHz)];

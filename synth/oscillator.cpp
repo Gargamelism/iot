@@ -2,6 +2,7 @@
 #include "voices.h"
 #include <math.h>
 #include <stdlib.h>
+#include <string.h> // for memcmp
 
 int16_t g_sineTable[SINE_TABLE_SIZE];
 const int16_t *g_wavetable[SPREAD_COUNT][WAVETABLE_MIP_LEVELS] = {};
@@ -28,9 +29,9 @@ void initSineTable() {
 // --- Wavetables ------------------------------------------------------------
 
 int harmonicsForMipLevel(int level) {
-  // Band-limit against the TOP of the level's octave, not its base, so a
+  // Band-limit against the TOP of the level's range, not its base, so a
   // voice anywhere inside the level stays alias-free.
-  const float topHz = WAVETABLE_MIP_BASE_HZ * (float)(2 << level);
+  const float topHz = WAVETABLE_MIP_BASE_HZ * exp2f((float)(level + 1) / WAVETABLE_MIPS_PER_OCTAVE);
   int count = (int)((SAMPLE_RATE_HZ / 2.0f) / topHz);
   if (count > NUM_HARMONICS) count = NUM_HARMONICS;
   if (count < 1) count = 1; // the top level keeps a bare fundamental
@@ -39,7 +40,7 @@ int harmonicsForMipLevel(int level) {
 
 int mipLevelForFreq(float freqHz) {
   if (freqHz <= WAVETABLE_MIP_BASE_HZ) return 0;
-  int level = (int)floorf(log2f(freqHz / WAVETABLE_MIP_BASE_HZ));
+  int level = (int)floorf(WAVETABLE_MIPS_PER_OCTAVE * log2f(freqHz / WAVETABLE_MIP_BASE_HZ));
   if (level < 0) level = 0;
   if (level > WAVETABLE_MIP_LEVELS - 1) level = WAVETABLE_MIP_LEVELS - 1;
   return level;
@@ -75,14 +76,18 @@ size_t wavetableBytesAllocated() {
   size_t bytes = 0;
   for (int spread = 0; spread < SPREAD_COUNT; spread++) {
     for (int level = 0; level < WAVETABLE_MIP_LEVELS; level++) {
-      if (g_wavetable[spread][level] != nullptr) bytes += WAVETABLE_TABLE_ENTRIES * sizeof(int16_t);
+      const int16_t *table = g_wavetable[spread][level];
+      // A level that shares the table below it costs nothing extra.
+      if (table != nullptr && (level == 0 || table != g_wavetable[spread][level - 1])) {
+        bytes += WAVETABLE_TABLE_ENTRIES * sizeof(int16_t);
+      }
     }
   }
   return bytes;
 }
 
 float mipLevelCentreHz(int level) {
-  return WAVETABLE_MIP_BASE_HZ * exp2f(level + 0.5f);
+  return WAVETABLE_MIP_BASE_HZ * exp2f((level + 0.5f) / WAVETABLE_MIPS_PER_OCTAVE);
 }
 
 static void buildTable(int16_t *table, int spread, int harmonicCount, float centreHz) {
@@ -162,6 +167,17 @@ bool initWavetables() {
         continue;
       }
       buildTable(table, spread, harmonicsForMipLevel(level), mipLevelCentreHz(level));
+      // Low levels all keep NUM_HARMONICS, and sparse spreads stop changing
+      // early, so many levels come out identical to the one below: share
+      // that table instead of keeping a duplicate (identical levels are
+      // always contiguous from level 0).
+      const int16_t *below = level > 0 ? g_wavetable[spread][level - 1] : nullptr;
+      if (below != nullptr &&
+          memcmp(table, below, WAVETABLE_TABLE_ENTRIES * sizeof(int16_t)) == 0) {
+        free(table);
+        g_wavetable[spread][level] = below;
+        continue;
+      }
       g_wavetable[spread][level] = table;
     }
   }
